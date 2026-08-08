@@ -1,0 +1,16 @@
+objectives:
+  coverage_score:
+    weight: 1.0
+    direction: maximize
+  residual_volume_ml:
+    weight: 0.5
+    direction: minimize
+
+constraints:
+  neck_clearance: true
+  fdm_printability: true
+
+budget:
+  max_trials: 200
+  timeout_s: 3600
+  seed: 42

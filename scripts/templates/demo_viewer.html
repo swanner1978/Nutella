@@ -1,0 +1,2171 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nutella Scraper — Visualisation CAD</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #000;
+        color: #fff;
+        --sidebar-width: 272px;
+        --toolbar-height: 52px;
+        --panel-body-max: min(38vh, 300px);
+        --border: #1f1f1f;
+        --border-soft: #141414;
+        --surface: #090909;
+        --surface-raised: #121212;
+        --text-muted: #777;
+        --accent: #e8e8e8;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      .app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+      .toolbar {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 0.35rem;
+        min-height: var(--toolbar-height);
+        padding: 0.45rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, #111 0%, #0a0a0a 100%);
+        overflow-x: auto;
+        scrollbar-width: thin;
+      }
+      .toolbar-brand {
+        display: flex;
+        flex-shrink: 0;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 8.5rem;
+        padding-right: 0.75rem;
+        margin-right: 0.35rem;
+        border-right: 1px solid var(--border);
+      }
+      .toolbar-brand strong {
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .toolbar-brand span {
+        margin-top: 0.1rem;
+        color: #555;
+        font-size: 0.62rem;
+      }
+      .toolbar-group {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0 0.35rem;
+        border-right: 1px solid var(--border-soft);
+      }
+      .toolbar-group:last-child {
+        border-right: 0;
+      }
+      .toolbar-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        min-height: 2rem;
+        padding: 0.35rem 0.65rem;
+        border: 1px solid #333;
+        border-radius: 4px;
+        background: var(--surface-raised);
+        color: #ddd;
+        font-size: 0.72rem;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .toolbar-btn:hover:not(:disabled) {
+        background: #1c1c1c;
+        border-color: #444;
+      }
+      .toolbar-btn:disabled {
+        opacity: 0.38;
+        cursor: not-allowed;
+      }
+      .toolbar-btn[data-active="true"] {
+        border-color: #666;
+        background: #222;
+        color: #fff;
+      }
+      .toolbar-btn.danger {
+        border-color: #5a3030;
+        color: #ffaaaa;
+      }
+      .toolbar-btn.primary {
+        border-color: #555;
+        background: #ececec;
+        color: #111;
+      }
+      .toolbar-btn.primary:hover:not(:disabled) {
+        background: #fff;
+      }
+      .toolbar-status {
+        flex-shrink: 0;
+        min-width: 10rem;
+        max-width: 18rem;
+        padding: 0 0.5rem;
+        color: #888;
+        font-size: 0.68rem;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+      .toolbar-status[data-state="error"] { color: #ff6b6b; }
+      .toolbar-status[data-state="loading"] { color: #f4c15d; }
+      .toolbar-status[data-state="ready"] { color: #73d89b; }
+      .pose-navigator {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 0.35rem;
+        align-items: center;
+        margin: 0.5rem 0;
+      }
+      .pose-nav-btn {
+        min-width: 1.75rem;
+        min-height: 1.75rem;
+        padding: 0;
+        border: 1px solid #333;
+        border-radius: 3px;
+        background: #151515;
+        color: #ccc;
+        cursor: pointer;
+      }
+      .pose-nav-btn:hover:not(:disabled) { background: #222; color: #fff; }
+      .pose-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+      .pose-info {
+        padding: 0.45rem 0.5rem;
+        border: 1px solid #222;
+        border-radius: 3px;
+        background: #0d0d0d;
+        color: #bbb;
+        font-size: 0.68rem;
+        line-height: 1.45;
+        font-variant-numeric: tabular-nums;
+      }
+      .pose-info strong {
+        display: block;
+        margin-bottom: 0.15rem;
+        color: #eee;
+        font-size: 0.72rem;
+        font-weight: 500;
+      }
+      .panel-section-label {
+        margin: 0.65rem 0 0.35rem;
+        color: #555;
+        font-size: 0.62rem;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+      .toolbar-spacer {
+        flex: 1;
+        min-width: 0.5rem;
+      }
+      .workspace {
+        display: grid;
+        flex: 1;
+        grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+        min-height: 0;
+        overflow: hidden;
+      }
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .sidebar-header {
+        flex-shrink: 0;
+        padding: 0.75rem 0.85rem 0.55rem;
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .sidebar-header h1 {
+        margin: 0 0 0.55rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+      }
+      .accordion-global {
+        display: flex;
+        gap: 0.35rem;
+      }
+      .accordion-global button {
+        flex: 1;
+        min-height: 1.75rem;
+        padding: 0.25rem 0.4rem;
+        border: 1px solid #2a2a2a;
+        border-radius: 3px;
+        background: #111;
+        color: #aaa;
+        font-size: 0.64rem;
+        cursor: pointer;
+      }
+      .accordion-global button:hover {
+        background: #181818;
+        color: #ddd;
+      }
+      .accordion-stack {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: thin;
+      }
+      .accordion-panel {
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .accordion-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.65rem 0.85rem;
+        background: #0c0c0c;
+      }
+      .accordion-header h2 {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .accordion-actions {
+        display: flex;
+        gap: 0.2rem;
+      }
+      .accordion-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.45rem;
+        height: 1.45rem;
+        padding: 0;
+        border: 1px solid #333;
+        border-radius: 3px;
+        background: #151515;
+        color: #bbb;
+        font-size: 0.85rem;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .accordion-toggle:hover {
+        background: #222;
+        color: #fff;
+      }
+      .accordion-body {
+        display: none;
+        max-height: var(--panel-body-max);
+        padding: 0.65rem 0.85rem 0.85rem;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: thin;
+        border-top: 1px solid #111;
+        background: #080808;
+      }
+      .accordion-panel[data-expanded="true"] .accordion-body {
+        display: block;
+      }
+      .browse-button {
+        display: block;
+        width: 100%;
+        padding: 0.65rem 0.75rem;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: #fff;
+        color: #000;
+        text-align: center;
+        cursor: pointer;
+      }
+      .browse-button:hover {
+        background: #ddd;
+      }
+      #step-file,
+      #scraper-file {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      .upload-hint,
+      .status {
+        margin: 0.55rem 0 0;
+        color: #666;
+        font-size: 0.68rem;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+      .status[data-state="error"] {
+        color: #ff6b6b;
+      }
+      .status[data-state="loading"] {
+        color: #f4c15d;
+      }
+      .status[data-state="ready"] {
+        color: #73d89b;
+      }
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin: 0.55rem 0;
+        color: #ccc;
+        font-size: 0.76rem;
+        cursor: pointer;
+      }
+      .toggle input {
+        accent-color: #fff;
+      }
+      .action-button,
+      .panel-select {
+        display: block;
+        width: 100%;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid #444;
+        border-radius: 4px;
+        background: #151515;
+        color: #eee;
+        text-align: left;
+        cursor: pointer;
+      }
+      .action-button:hover:not(:disabled),
+      .panel-select:hover:not(:disabled) {
+        background: #222;
+      }
+      .action-button:disabled,
+      .panel-select:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .cancel-button {
+        margin-top: 0.45rem;
+        border-color: #743b3b;
+        color: #ff9a9a;
+      }
+      .simulation-progress {
+        display: none;
+        margin-top: 0.65rem;
+        color: #aaa;
+        font-size: 0.7rem;
+        line-height: 1.45;
+      }
+      .simulation-progress[data-active="true"] {
+        display: block;
+      }
+      .activity-indicator::before {
+        display: inline-block;
+        width: 0.8rem;
+        content: "◌";
+        animation: activity-spin 0.8s linear infinite;
+      }
+      @keyframes activity-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .diagnostic-panel .accordion-body {
+        white-space: pre-wrap;
+        color: #8ea7bf;
+        font: 0.66rem/1.45 Consolas, monospace;
+      }
+      .diagnostic-panel[data-enabled="false"] .accordion-body {
+        color: #555;
+      }
+      .diagnostic-summary {
+        white-space: pre-wrap;
+        color: #9aa5b1;
+        font: 0.68rem/1.45 Consolas, monospace;
+      }
+      .metrics-panel {
+        display: grid;
+        gap: 0.4rem;
+        font-size: 0.72rem;
+        color: #aaa;
+      }
+      .metric-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      .metric-row strong {
+        color: #ddd;
+        font-weight: 500;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .metric-row span {
+        color: #666;
+      }
+      .metrics-empty {
+        color: #444;
+        font-size: 0.7rem;
+        line-height: 1.4;
+      }
+      .main {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        flex-direction: column;
+        overflow: hidden;
+        background: #000;
+      }
+      .viewer-header {
+        flex-shrink: 0;
+        padding: 0.55rem 1rem;
+        border-bottom: 1px solid var(--border-soft);
+      }
+      .viewer-header strong {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 500;
+      }
+      .viewer-header span {
+        display: block;
+        margin-top: 0.2rem;
+        color: #555;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 0.65rem;
+        overflow-wrap: anywhere;
+      }
+      .viewer-grid {
+        display: grid;
+        flex: 1;
+        grid-template-columns: 1fr 1fr;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .view-column {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        flex-direction: column;
+        border-right: 1px solid var(--border-soft);
+        overflow: hidden;
+      }
+      .view-column:last-child {
+        border-right: 0;
+      }
+      .view-label {
+        flex-shrink: 0;
+        padding: 0.45rem 0.85rem;
+        border-bottom: 1px solid #111;
+        color: #666;
+        font-size: 0.65rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .view-stage {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        background: #000;
+      }
+      .view-viewport {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        cursor: grab;
+        touch-action: none;
+      }
+      .view-viewport.dragging {
+        cursor: grabbing;
+      }
+      .view-transform {
+        transform-origin: center center;
+        will-change: transform;
+      }
+      .view-transform svg {
+        display: block;
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+      }
+      .empty-message {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        color: #3e3e3e;
+        font-size: 0.78rem;
+        text-align: center;
+      }
+      .view-dims {
+        flex-shrink: 0;
+        min-height: 52px;
+        padding: 0.6rem 0.85rem;
+        border-top: 1px solid #111;
+        color: #aaa;
+        font-size: 0.76rem;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+      .view-dims strong,
+      .view-dims span {
+        display: block;
+      }
+      .view-dims strong {
+        color: #fff;
+        font-weight: 500;
+      }
+      .view-dims span {
+        margin-top: 0.15rem;
+        color: #555;
+        font-size: 0.65rem;
+      }
+      .view-hint {
+        flex-shrink: 0;
+        padding: 0.25rem 0.85rem 0.45rem;
+        color: #444;
+        font-size: 0.62rem;
+        text-align: center;
+      }
+      @media (max-width: 1100px) {
+        :root {
+          --sidebar-width: 240px;
+        }
+        .toolbar-btn .btn-label {
+          display: none;
+        }
+      }
+      @media (max-width: 900px) {
+        .workspace {
+          grid-template-columns: 220px minmax(0, 1fr);
+        }
+        .viewer-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="toolbar" aria-label="Barre d'outils principale">
+        <div class="toolbar-brand">
+          <strong>Nutella Scraper</strong>
+          <span>Visualisation CAD</span>
+        </div>
+
+        <div class="toolbar-group" aria-label="Fichiers STEP">
+          <button class="toolbar-btn" id="toolbar-load-step" type="button" title="Charger un STEP">
+            <span class="btn-label">Charger STEP</span>
+          </button>
+          <button class="toolbar-btn" id="toolbar-reload-step" type="button" disabled title="Recharger le STEP">
+            <span class="btn-label">Recharger</span>
+          </button>
+        </div>
+
+        <div class="toolbar-group" aria-label="Scraper">
+          <button class="toolbar-btn" id="toolbar-save-scraper" type="button" disabled title="Sauvegarder un Scraper">
+            <span class="btn-label">Sauvegarder</span>
+          </button>
+          <button class="toolbar-btn" id="toolbar-load-scraper" type="button" disabled title="Charger un Scraper">
+            <span class="btn-label">Charger Scraper</span>
+          </button>
+          <button class="toolbar-btn" id="toolbar-new-scraper" type="button" disabled title="Nouveau Scraper">
+            <span class="btn-label">Nouveau</span>
+          </button>
+          <button class="toolbar-btn" id="toolbar-build-scraper" type="button" disabled title="Build Scraper">
+            <span class="btn-label">Build Scraper</span>
+          </button>
+        </div>
+
+        <div class="toolbar-group" aria-label="Simulation">
+          <button class="toolbar-btn primary" id="simulate-contact" type="button" disabled title="Lancer la simulation">
+            <span class="btn-label">Simuler</span>
+          </button>
+          <button class="toolbar-btn danger" id="cancel-simulation" type="button" hidden title="Arrêter la simulation">
+            <span class="btn-label">Arrêter</span>
+          </button>
+          <button class="toolbar-btn" id="toolbar-reset" type="button" title="Réinitialiser">
+            <span class="btn-label">Réinitialiser</span>
+          </button>
+        </div>
+
+        <div class="toolbar-group" aria-label="Affichage rapide">
+          <button class="toolbar-btn" id="toolbar-toggle-overlays" type="button" data-active="true" title="Afficher/Masquer overlays de contact">
+            <span class="btn-label">Overlays</span>
+          </button>
+          <button class="toolbar-btn" id="toolbar-toggle-envelope" type="button" title="Afficher/Masquer le contour intérieur">
+            <span class="btn-label">Contour intérieur</span>
+          </button>
+          <button class="toolbar-btn" id="toolbar-toggle-trajectory" type="button" title="Afficher/Masquer la trajectoire">
+            <span class="btn-label">Trajectoire</span>
+          </button>
+        </div>
+
+        <div class="toolbar-status" id="status" data-state="idle">Aucun modèle chargé</div>
+        <input id="step-file" type="file" accept=".step,.stp" hidden />
+        <div class="toolbar-spacer"></div>
+      </header>
+
+      <div class="workspace">
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <h1>Propriétés</h1>
+            <div class="accordion-global">
+              <button id="expand-all-panels" type="button">Tout développer</button>
+              <button id="collapse-all-panels" type="button">Tout réduire</button>
+            </div>
+          </div>
+
+          <div class="accordion-stack" id="sidebar-accordions">
+            <section class="accordion-panel" data-panel="overlays" data-expanded="false">
+              <header class="accordion-header">
+                <h2>Calques</h2>
+                <div class="accordion-actions">
+                  <button class="accordion-toggle" type="button" data-action="expand" aria-label="Développer Overlays">+</button>
+                  <button class="accordion-toggle" type="button" data-action="collapse" aria-label="Réduire Overlays">−</button>
+                </div>
+              </header>
+              <div class="accordion-body">
+                <label class="toggle">
+                  <input type="checkbox" data-visibility-toggle="pot" checked />
+                  Pot
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" data-visibility-toggle="scraper" checked />
+                  Scraper3D
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" id="toggle-envelope" data-visibility-toggle="envelope" />
+                  Contour intérieur
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" id="toggle-trajectory" data-visibility-toggle="trajectory" />
+                  Trajectoire du racloir
+                </label>
+                <p class="panel-section-label">Résultats de contact</p>
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="contact-covered" checked />
+                  Zones couvertes (vert)
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="contact-uncovered" checked />
+                  Zones non couvertes (rouge)
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="distance-map" />
+                  Carte de distances
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="contact-points" checked />
+                  Points de contact
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" data-visibility-toggle="collisions" checked />
+                  Collisions
+                </label>
+              </div>
+            </section>
+
+            <section class="accordion-panel" data-panel="metrics" data-expanded="false">
+              <header class="accordion-header">
+                <h2>Métriques</h2>
+                <div class="accordion-actions">
+                  <button class="accordion-toggle" type="button" data-action="expand" aria-label="Développer Métriques">+</button>
+                  <button class="accordion-toggle" type="button" data-action="collapse" aria-label="Réduire Métriques">−</button>
+                </div>
+              </header>
+              <div class="accordion-body">
+                <div class="metrics-panel" id="contact-metrics">
+                  <p class="metrics-empty">Lancez une simulation pour afficher les métriques ContactResult.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="accordion-panel" data-panel="simulation" data-expanded="false">
+              <header class="accordion-header">
+                <h2>Pose &amp; simulation</h2>
+                <div class="accordion-actions">
+                  <button class="accordion-toggle" type="button" data-action="expand" aria-label="Développer Simulation">+</button>
+                  <button class="accordion-toggle" type="button" data-action="collapse" aria-label="Réduire Simulation">−</button>
+                </div>
+              </header>
+              <div class="accordion-body">
+                <div class="simulation-progress" id="simulation-progress" data-active="false">
+                  <div class="activity-indicator" id="simulation-phase">Préparation</div>
+                  <div id="simulation-elapsed">Temps écoulé : 0,0 s</div>
+                </div>
+                <p class="panel-section-label">Pose simulée</p>
+                <div class="pose-navigator">
+                  <button class="pose-nav-btn" id="pose-prev" type="button" disabled aria-label="Pose précédente">‹</button>
+                  <div class="pose-info" id="pose-info">
+                    <strong>Pose —</strong>
+                    Position — · Orientation — · Hauteur —
+                  </div>
+                  <button class="pose-nav-btn" id="pose-next" type="button" disabled aria-label="Pose suivante">›</button>
+                </div>
+                <select class="panel-select" id="trajectory-pose" hidden disabled>
+                  <option value="">Aucune simulation</option>
+                </select>
+                <p class="upload-hint" id="scraper-pose-proof">
+                  Construisez ou simulez le racloir pour afficher le Scraper3D
+                </p>
+              </div>
+            </section>
+
+            <section class="accordion-panel" data-panel="display" data-expanded="false">
+              <header class="accordion-header">
+                <h2>Affichage pot</h2>
+                <div class="accordion-actions">
+                  <button class="accordion-toggle" type="button" data-action="expand" aria-label="Développer Affichage">+</button>
+                  <button class="accordion-toggle" type="button" data-action="collapse" aria-label="Réduire Affichage">−</button>
+                </div>
+              </header>
+              <div class="accordion-body">
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="contour" checked />
+                  Afficher le profil intérieur
+                </label>
+              </div>
+            </section>
+
+            <section class="accordion-panel" data-panel="diagnostic" data-expanded="false">
+              <header class="accordion-header">
+                <h2>Diagnostic</h2>
+                <div class="accordion-actions">
+                  <button class="accordion-toggle" type="button" data-action="expand" aria-label="Développer Diagnostic">+</button>
+                  <button class="accordion-toggle" type="button" data-action="collapse" aria-label="Réduire Diagnostic">−</button>
+                </div>
+              </header>
+              <div class="accordion-body">
+                <div class="diagnostic-summary" id="diagnostic-summary">Aucun diagnostic disponible.</div>
+              </div>
+            </section>
+
+            <section class="accordion-panel diagnostic-panel" id="simulation-diagnostics" data-panel="development" data-expanded="false">
+              <header class="accordion-header">
+                <h2>Développement</h2>
+                <div class="accordion-actions">
+                  <button class="accordion-toggle" type="button" data-action="expand" aria-label="Développer Développement">+</button>
+                  <button class="accordion-toggle" type="button" data-action="collapse" aria-label="Réduire Développement">−</button>
+                </div>
+              </header>
+              <div class="accordion-body">
+                <div id="diagnostic-content">Aucun profil disponible.</div>
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="wireframe" />
+                  Afficher le wireframe (debug maillage)
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="vertices" />
+                  Afficher les sommets (vertices)
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="bounding-box" />
+                  Afficher la bounding box
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" data-layer-toggle="principal-axes" />
+                  Afficher les axes principaux
+                </label>
+              </div>
+            </section>
+          </div>
+        </aside>
+
+        <main class="main">
+          <header class="viewer-header">
+            <strong id="model-title">Aucun CanonicalModel3D chargé</strong>
+            <span id="model-proof">@visualization_only</span>
+          </header>
+
+          <div class="viewer-grid">
+            <section class="view-column">
+              <div class="view-label" id="side-label">Vue de profil — génératrice intérieure</div>
+              <div class="view-stage" id="side-stage"></div>
+              <div class="view-dims" id="side-dims"></div>
+              <div class="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
+            </section>
+
+            <section class="view-column">
+              <div class="view-label" id="top-label">Vue de dessus — contour intérieur XZ</div>
+              <div class="view-stage" id="top-stage"></div>
+              <div class="view-dims" id="top-dims"></div>
+              <div class="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <input id="scraper-file" type="file" accept=".json,.yaml,.yml" />
+
+    <script>
+      const stages = {
+        side: document.getElementById("side-stage"),
+        top: document.getElementById("top-stage"),
+      };
+      const viewLabels = {
+        side: document.getElementById("side-label"),
+        top: document.getElementById("top-label"),
+      };
+      const VIEW_SPECS = {
+        side: {
+          plane: "XZ",
+          viewAxis: "Y",
+          labelFr: "Vue de profil",
+          labelEn: "Profile View",
+          dimensionAxes: "X × Z",
+        },
+        top: {
+          plane: "XY",
+          viewAxis: "Z",
+          labelFr: "Vue de dessus",
+          labelEn: "Top View",
+          dimensionAxes: "X × Y",
+        },
+      };
+      const API = {
+        importStep: "/api/import-step",
+        simulateContact: "/api/simulate-contact",
+        buildScraper: "/api/build-scraper",
+        interiorContour: "/api/interior-contour",
+        runtime: "/api/runtime",
+      };
+      const statusElement = document.getElementById("status");
+      const fileInput = document.getElementById("step-file");
+      const simulateButton = document.getElementById("simulate-contact");
+      const cancelButton = document.getElementById("cancel-simulation");
+      const simulationProgress = document.getElementById("simulation-progress");
+      const simulationPhase = document.getElementById("simulation-phase");
+      const simulationElapsed = document.getElementById("simulation-elapsed");
+      const poseSelect = document.getElementById("trajectory-pose");
+      const poseInfo = document.getElementById("pose-info");
+      const posePrevButton = document.getElementById("pose-prev");
+      const poseNextButton = document.getElementById("pose-next");
+      const scraperPoseProof = document.getElementById("scraper-pose-proof");
+      const metricsPanel = document.getElementById("contact-metrics");
+      const diagnosticPanel = document.getElementById("simulation-diagnostics");
+      const diagnosticContent = document.getElementById("diagnostic-content");
+      const diagnosticSummary = document.getElementById("diagnostic-summary");
+      const envelopeToggle = document.getElementById("toggle-envelope");
+      const trajectoryToggle = document.getElementById("toggle-trajectory");
+      const toolbarReload = document.getElementById("toolbar-reload-step");
+      const toolbarReset = document.getElementById("toolbar-reset");
+      const toolbarToggleOverlays = document.getElementById("toolbar-toggle-overlays");
+      const toolbarToggleEnvelope = document.getElementById("toolbar-toggle-envelope");
+      const toolbarToggleTrajectory = document.getElementById("toolbar-toggle-trajectory");
+      const toolbarBuildScraper = document.getElementById("toolbar-build-scraper");
+      const CONTACT_LAYER_NAMES = [
+        "contact-covered",
+        "contact-uncovered",
+        "distance-map",
+        "contact-points",
+        "collision-faces",
+        "collision-points",
+        "scraper-volume",
+        "scraper-contour",
+        "interior-envelope",
+        "scraper-trajectory",
+      ];
+      const SCRAPER_LAYER_NAMES = ["scraper-volume", "scraper-contour"];
+      const OVERLAY_LAYER_NAMES = [
+        "contact-covered",
+        "contact-uncovered",
+        "distance-map",
+        "contact-points",
+        "collision-faces",
+        "collision-points",
+        "scraper-volume",
+        "scraper-contour",
+      ];
+      let loadSequence = 0;
+      let activeRequest = null;
+      let activeModelLoaded = false;
+      let currentModelId = null;
+      let currentMetadataUrl = null;
+      let currentBaseUrl = null;
+      let lastUploadedFile = null;
+      let activeSimulation = null;
+      let completedSimulation = null;
+      let simulationPollController = null;
+      let poseRequestSequence = 0;
+      let devMode = false;
+      let overlaysMasterVisible = true;
+      let lastContactMetrics = null;
+      let profileReconstruction = null;
+      let interiorContourOverlays = null;
+      let trajectoryOverlays = null;
+      let currentPoseIndex = 0;
+      let poseManifestEntries = [];
+
+      function setStatus(message, state = "idle") {
+        statusElement.textContent = message;
+        statusElement.dataset.state = state;
+      }
+
+      function sleep(milliseconds) {
+        return new Promise((resolve) => setTimeout(resolve, milliseconds));
+      }
+
+      function syncToolbarState(running = false) {
+        simulateButton.disabled = running || !activeModelLoaded;
+        cancelButton.hidden = !running;
+        toolbarReload.disabled = running || !activeModelLoaded;
+        toolbarBuildScraper.disabled = running || !activeModelLoaded;
+        toolbarToggleEnvelope.dataset.active = String(envelopeToggle.checked);
+        toolbarToggleTrajectory.dataset.active = String(trajectoryToggle.checked);
+      }
+
+      function setSimulationControls(running) {
+        simulationProgress.dataset.active = String(running);
+        syncToolbarState(running);
+      }
+
+      function setPanelExpanded(panel, expanded) {
+        panel.dataset.expanded = String(expanded);
+      }
+
+      function initializeAccordions() {
+        const stack = document.getElementById("sidebar-accordions");
+        for (const panel of stack.querySelectorAll(".accordion-panel")) {
+          for (const button of panel.querySelectorAll(".accordion-toggle")) {
+            button.addEventListener("click", () => {
+              setPanelExpanded(panel, button.dataset.action === "expand");
+            });
+          }
+          panel.querySelector(".accordion-header h2")?.addEventListener("click", () => {
+            setPanelExpanded(panel, panel.dataset.expanded !== "true");
+          });
+        }
+        document.getElementById("expand-all-panels").addEventListener("click", () => {
+          for (const panel of stack.querySelectorAll(".accordion-panel")) {
+            setPanelExpanded(panel, true);
+          }
+        });
+        document.getElementById("collapse-all-panels").addEventListener("click", () => {
+          for (const panel of stack.querySelectorAll(".accordion-panel")) {
+            setPanelExpanded(panel, false);
+          }
+        });
+      }
+
+      function openPanelByName(name) {
+        const panel = document.querySelector(`.accordion-panel[data-panel="${name}"]`);
+        if (panel) setPanelExpanded(panel, true);
+      }
+
+      function attachPanZoom(viewport, inner) {
+        let scale = 1;
+        let panX = 0;
+        let panY = 0;
+        let dragging = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        function applyTransform() {
+          inner.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+        }
+
+        function resetTransform() {
+          scale = 1;
+          panX = 0;
+          panY = 0;
+          applyTransform();
+        }
+
+        viewport.addEventListener(
+          "wheel",
+          (event) => {
+            event.preventDefault();
+            const factor = event.deltaY > 0 ? 0.92 : 1.08;
+            scale = Math.min(10, Math.max(0.15, scale * factor));
+            applyTransform();
+          },
+          { passive: false },
+        );
+
+        viewport.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) return;
+          dragging = true;
+          lastX = event.clientX;
+          lastY = event.clientY;
+          viewport.classList.add("dragging");
+        });
+
+        window.addEventListener("mousemove", (event) => {
+          if (!dragging) return;
+          panX += event.clientX - lastX;
+          panY += event.clientY - lastY;
+          lastX = event.clientX;
+          lastY = event.clientY;
+          applyTransform();
+        });
+
+        window.addEventListener("mouseup", () => {
+          dragging = false;
+          viewport.classList.remove("dragging");
+        });
+
+        viewport.addEventListener("dblclick", resetTransform);
+        viewport._resetView = resetTransform;
+      }
+
+      function mountSvgInStage(stage, svg) {
+        stage.replaceChildren();
+        const viewport = document.createElement("div");
+        viewport.className = "view-viewport";
+        const inner = document.createElement("div");
+        inner.className = "view-transform";
+        inner.appendChild(svg);
+        viewport.appendChild(inner);
+        stage.appendChild(viewport);
+        attachPanZoom(viewport, inner);
+      }
+
+      function resetViewTransforms() {
+        for (const viewport of document.querySelectorAll(".view-viewport")) {
+          viewport._resetView?.();
+        }
+      }
+
+      function showStagePlaceholder(stage, message) {
+        stage.replaceChildren();
+        const placeholder = document.createElement("span");
+        placeholder.className = "empty-message";
+        placeholder.textContent = message;
+        stage.append(placeholder);
+      }
+
+      function toggleEnvelopeMaster() {
+        envelopeToggle.checked = !envelopeToggle.checked;
+        toolbarToggleEnvelope.dataset.active = String(envelopeToggle.checked);
+        if (envelopeToggle.checked && !interiorContourOverlays && activeModelLoaded) {
+          fetchInteriorContour().catch((error) => {
+            setStatus(error.message.split("\n")[0], "error");
+          });
+          return;
+        }
+        applyLayerVisibility();
+      }
+
+      function toggleTrajectoryMaster() {
+        trajectoryToggle.checked = !trajectoryToggle.checked;
+        toolbarToggleTrajectory.dataset.active = String(trajectoryToggle.checked);
+        applyLayerVisibility();
+      }
+
+      function formatPoseLabel(pose, index, total) {
+        if (!pose) {
+          return {
+            title: "Pose —",
+            detail: "Position — · Orientation — · Hauteur —",
+          };
+        }
+        const [x, y, z] = pose.position_mm ?? [0, 0, 0];
+        const title = total > 1 ? `Pose ${index + 1} / ${total}` : "Pose unique";
+        const detail =
+          `Position (${Number(x).toFixed(1)}, ${Number(y).toFixed(1)}, ${Number(z).toFixed(1)}) mm · ` +
+          `Orientation (${Number(pose.yaw_deg).toFixed(1)}°, ${Number(pose.pitch_deg).toFixed(1)}°, ${Number(pose.roll_deg).toFixed(1)}°) · ` +
+          `Hauteur ${Number(pose.height_mm ?? y).toFixed(1)} mm`;
+        return { title, detail };
+      }
+
+      function renderPoseInfo(pose, index = currentPoseIndex, total = poseManifestEntries.length) {
+        const { title, detail } = formatPoseLabel(pose, index, total);
+        poseInfo.innerHTML = `<strong>${title}</strong>${detail}`;
+        posePrevButton.disabled = total <= 1 || index <= 0;
+        poseNextButton.disabled = total <= 1 || index >= total - 1;
+      }
+
+      function syncPoseNavigator() {
+        const total = poseManifestEntries.length;
+        if (total === 0) {
+          renderPoseInfo(null);
+          return;
+        }
+        const entry = poseManifestEntries[currentPoseIndex];
+        renderPoseInfo(entry?.pose ?? null, currentPoseIndex, total);
+      }
+
+      function toggleOverlaysMaster() {
+        overlaysMasterVisible = !overlaysMasterVisible;
+        toolbarToggleOverlays.dataset.active = String(overlaysMasterVisible);
+        applyLayerVisibility();
+      }
+
+      async function fetchInteriorContour() {
+        if (!currentModelId) return;
+        setStatus("Calcul du contour intérieur…", "loading");
+        const response = await fetch(API.interiorContour, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model_id: currentModelId }),
+          cache: "no-store",
+        });
+        const result = await readJsonResponse(response);
+        if (!response.ok) {
+          throw new Error(formatServerError(result, `Échec contour intérieur (${response.status})`));
+        }
+        interiorContourOverlays = {
+          side: result.overlays?.side ?? {},
+          top: result.overlays?.top ?? {},
+        };
+        if (result.reconstruction) {
+          profileReconstruction = result.reconstruction;
+          renderDiagnosticSummary(lastContactMetrics);
+        }
+        applyStoredOverlays();
+        applyLayerVisibility();
+        setStatus("Contour intérieur prêt", "ready");
+      }
+
+      async function buildScraperOnly() {
+        if (!activeModelLoaded || !currentModelId) {
+          setStatus("Importez un modèle STEP avant le build", "error");
+          return;
+        }
+        setStatus("Construction du Scraper3D…", "loading");
+        toolbarBuildScraper.disabled = true;
+        try {
+          const response = await fetch(API.buildScraper, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_id: currentModelId }),
+            cache: "no-store",
+          });
+          const result = await readJsonResponse(response);
+          if (!response.ok) {
+            throw new Error(formatServerError(result, `Échec build Scraper (${response.status})`));
+          }
+          injectScraperLayersOnly(result.overlays);
+          if (result.pose) {
+            poseManifestEntries = [{ index: 0, pose: result.pose }];
+            currentPoseIndex = 0;
+            syncPoseNavigator();
+          }
+          scraperPoseProof.textContent =
+            `Scraper3D V1 — ${result.scraper.vertex_count} v / ${result.scraper.face_count} f · ${result.scraper.provenance}`;
+          setStatus("Scraper3D construit", "ready");
+        } catch (error) {
+          setStatus(error.message.split("\n")[0], "error");
+          console.error("[viewer:build-scraper]", error);
+        } finally {
+          syncToolbarState(Boolean(activeSimulation));
+        }
+      }
+
+      function injectScraperLayersOnly(overlayPayload) {
+        const sideSvg = stages.side.querySelector("svg");
+        const topSvg = stages.top.querySelector("svg");
+        if (!sideSvg || !topSvg) return;
+        for (const layerName of SCRAPER_LAYER_NAMES) {
+          for (const layer of sideSvg.querySelectorAll(`[data-layer="${layerName}"]`)) layer.remove();
+          for (const layer of topSvg.querySelectorAll(`[data-layer="${layerName}"]`)) layer.remove();
+        }
+        injectContactLayers(sideSvg, overlayPayload?.side ?? {});
+        injectContactLayers(topSvg, overlayPayload?.top ?? {});
+        applyLayerVisibility();
+      }
+
+      function applyStoredOverlays() {
+        const sideSvg = stages.side.querySelector("svg");
+        const topSvg = stages.top.querySelector("svg");
+        if (!sideSvg || !topSvg) return;
+        if (interiorContourOverlays) {
+          injectContactLayers(sideSvg, interiorContourOverlays.side ?? {});
+          injectContactLayers(topSvg, interiorContourOverlays.top ?? {});
+        }
+        if (trajectoryOverlays) {
+          injectContactLayers(sideSvg, trajectoryOverlays.side ?? {});
+          injectContactLayers(topSvg, trajectoryOverlays.top ?? {});
+        }
+      }
+
+      async function reloadCurrentStep() {
+        if (lastUploadedFile) {
+          await uploadStep(lastUploadedFile);
+          return;
+        }
+        if (!currentModelId || !currentMetadataUrl || !currentBaseUrl) {
+          setStatus("Aucun STEP à recharger", "error");
+          return;
+        }
+        const sequence = ++loadSequence;
+        activeRequest?.abort();
+        activeRequest = new AbortController();
+        setStatus("Rechargement du modèle…", "loading");
+        try {
+          await loadModel(
+            currentMetadataUrl,
+            currentBaseUrl,
+            sequence,
+            activeRequest.signal,
+          );
+        } catch (error) {
+          if (error.name !== "AbortError") {
+            setStatus(error.message, "error");
+          }
+        }
+      }
+
+      function resetApplication() {
+        activeRequest?.abort();
+        activeRequest = null;
+        if (activeSimulation?.cancel_url) {
+          fetch(activeSimulation.cancel_url, {
+            method: "DELETE",
+            cache: "no-store",
+          }).catch(() => {});
+        }
+        simulationPollController?.abort();
+        activeSimulation = null;
+        simulationPollController = null;
+        lastUploadedFile = null;
+        currentMetadataUrl = null;
+        currentBaseUrl = null;
+        interiorContourOverlays = null;
+        trajectoryOverlays = null;
+        profileReconstruction = null;
+        poseManifestEntries = [];
+        currentPoseIndex = 0;
+        diagnosticSummary.textContent = "Aucun diagnostic disponible.";
+        syncPoseNavigator();
+        diagnosticContent.textContent = devMode
+          ? "Aucun profil disponible."
+          : "Profil développement disponible en mode --dev.";
+        history.replaceState(null, "", location.pathname);
+        clearGraphics();
+        setSimulationControls(false);
+        syncToolbarState(false);
+      }
+
+      function renderSimulationState(state) {
+        const elapsed = Number(state.elapsed_ms ?? 0) / 1000;
+        const percent = state.progress_percent == null
+          ? ""
+          : ` — ${Number(state.progress_percent).toFixed(0)} %`;
+        simulationPhase.textContent =
+          `${state.phase_label ?? state.phase ?? "Simulation"}${percent}`;
+        simulationElapsed.textContent =
+          `Temps écoulé : ${elapsed.toLocaleString("fr-FR", {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          })} s${state.detail ? ` — ${state.detail}` : ""}`;
+        setStatus(
+          state.state === "blocked"
+            ? `Blocage potentiel détecté — ${state.detail}`
+            : `${state.phase_label ?? "Simulation en cours"}${percent}`,
+          state.state === "blocked" ? "error" : "loading",
+        );
+        renderDiagnosticSummary(null, null, null, state.error ?? null);
+        if (devMode) renderPerformanceProfile(state.profile_ms, state.error);
+      }
+
+      function formatScraperPipelineProof(pipeline, trajectory = null) {
+        if (!pipeline) {
+          return "Scraper3D — diagnostic pipeline indisponible";
+        }
+        if (pipeline.loss_stage) {
+          const stage = pipeline.stages?.[pipeline.loss_stage] ?? {};
+          const detail = stage.error ? ` (${stage.error})` : "";
+          return `Scraper3D perdu à l'étape « ${pipeline.loss_stage} »${detail}`;
+        }
+        const mesh = pipeline.stages?.mesh_built;
+        if (!mesh?.ok) {
+          return "Scraper3D — construction du maillage échouée";
+        }
+        let message =
+          `Scraper3D V1 — ${mesh.vertex_count} vertices · ${mesh.face_count} faces · ` +
+          `${Number(mesh.volume_mm3).toFixed(1)} mm³`;
+        const capture = pipeline.stages?.pose_capture;
+        if (capture?.mode === "reference_base_pose") {
+          message += " · pose de référence (aucune pose de trajectoire validée)";
+        } else if (trajectory?.simulated_pose_count != null) {
+          message += ` · ${trajectory.simulated_pose_count} pose(s) simulée(s)`;
+        }
+        return message;
+      }
+
+      function formatScraperPoseProof(pose, pipeline) {
+        const scraper = pose?.scraper;
+        if (scraper?.vertex_count != null) {
+          const matrix = pose.scraper_transform;
+          return (
+            `Pose ${pose.pose_index + 1}/${pose.pose_count} · Scraper3D exact ` +
+            `(${scraper.vertex_count} v / ${scraper.face_count} f · ` +
+            `${scraper.provenance}) · position=(${matrix[0][3].toFixed(2)}, ` +
+            `${matrix[1][3].toFixed(2)}, ${matrix[2][3].toFixed(2)}) mm`
+          );
+        }
+        return formatScraperPipelineProof(pipeline, pose);
+      }
+
+      function formatReconstructionLines(reconstruction) {
+        if (!reconstruction) return [];
+        const fmt = (value) =>
+          value == null || Number.isNaN(Number(value)) ? "—" : `${Number(value).toFixed(3)} mm`;
+        return [
+          "",
+          "Reconstruction profil intérieur",
+          `Méridienne max/RMS/H      ${fmt(reconstruction.meridian_max_error_mm)} / ${fmt(reconstruction.meridian_rms_error_mm)} / ${fmt(reconstruction.meridian_hausdorff_mm)}`,
+          `Dessus max/RMS/H          ${fmt(reconstruction.top_contour_max_error_mm)} / ${fmt(reconstruction.top_contour_rms_error_mm)} / ${fmt(reconstruction.top_contour_hausdorff_mm)}`,
+          `Circularité dessus        ${
+            reconstruction.top_contour_circularity == null
+              ? "—"
+              : Number(reconstruction.top_contour_circularity).toFixed(4)
+          }`,
+          `Contour circulaire        ${reconstruction.top_contour_is_circular ? "Oui" : "Non"}`,
+          `Points de contrôle        méridienne=${reconstruction.meridian_control_points ?? "—"}, dessus=${reconstruction.top_control_points ?? "—"}`,
+        ];
+      }
+
+      function renderDiagnosticSummary(
+        metrics = null,
+        poseConstraints = null,
+        scraperPipeline = null,
+        error = null,
+      ) {
+        const lines = [];
+        if (error) {
+          lines.push(
+            `Erreur : ${error.exception_type ?? "Exception"}`,
+            error.message ?? String(error),
+          );
+        }
+        lines.push(...formatReconstructionLines(profileReconstruction));
+        if (metrics) {
+          lines.push(
+            "",
+            "Résultat contact",
+            `Coverage score        ${metrics.coverage_score_percent.toFixed(1)} %`,
+            `Points de contact     ${metrics.contact_point_count}`,
+            `Collision             ${metrics.collision_label ?? (metrics.has_collision ? "Oui" : "Non")}`,
+          );
+        }
+        if (poseConstraints) {
+          lines.push(
+            "",
+            "Contraintes de pose",
+            `Poses candidates      ${poseConstraints.candidate_pose_count ?? "—"}`,
+            `Poses acceptées       ${poseConstraints.accepted_pose_count ?? "—"}`,
+            `Poses simulées        ${poseConstraints.simulated_pose_count ?? "—"}`,
+          );
+        }
+        if (scraperPipeline) {
+          lines.push("", "Pipeline Scraper3D");
+          if (scraperPipeline.loss_stage) {
+            lines.push(`Étape en échec        ${scraperPipeline.loss_stage}`);
+          }
+          for (const [stage, detail] of Object.entries(scraperPipeline.stages ?? {})) {
+            const status = detail?.ok === false ? "KO" : detail?.ok === true ? "OK" : "—";
+            lines.push(`${stage.padEnd(22)} ${status}`);
+          }
+        }
+        if (!lines.length) {
+          diagnosticSummary.textContent = "Aucun diagnostic disponible.";
+          return;
+        }
+        diagnosticSummary.textContent = lines.join("\n");
+      }
+
+      function renderPerformanceProfile(
+        profile,
+        error = null,
+        overlayProfile = null,
+        poseConstraints = null,
+        scraperPipeline = null,
+      ) {
+        diagnosticPanel.dataset.enabled = String(devMode);
+        renderDiagnosticSummary(lastContactMetrics, poseConstraints, scraperPipeline, error);
+        if (!devMode) {
+          diagnosticContent.textContent =
+            "Profil développement disponible en mode --dev.";
+          return;
+        }
+        const labels = {
+          preparation: "Préparation",
+          model_loading: "Chargement du modèle",
+          interior_surface_calculation: "Surface intérieure",
+          envelope_calculation: "Calcul de l'enveloppe",
+          pose_generation: "Génération des poses",
+          scraper_generation: "Construction Scraper3D",
+          contact_calculation: "Calcul des contacts",
+          distance_calculation: "Calcul des distances",
+          metrics_calculation: "Calcul des métriques",
+          pose_capture: "Capture des poses 3D",
+          overlay_generation: "Génération des overlays",
+          serialization: "Sérialisation",
+          frontend_transfer: "Envoi au frontend",
+          ui_refresh: "Rafraîchissement de l'interface",
+          total: "Temps total",
+        };
+        const lines = Object.entries(labels).map(([key, label]) => {
+          const value = profile?.[key];
+          return `${label.padEnd(31)} ${value == null ? "—" : `${Number(value).toFixed(1)} ms`}`;
+        });
+        if (overlayProfile) {
+          lines.push(
+            "",
+            "Overlay interne",
+            `Construction                     ${overlayProfile.construction_ms == null ? "—" : `${Number(overlayProfile.construction_ms).toFixed(1)} ms`}`,
+            `Faces uniques                  ${overlayProfile.face_count ?? "—"}`,
+            `Projections de faces traitées  ${overlayProfile.face_projections_processed ?? "—"}`,
+            `Points de contact source       ${overlayProfile.contact_point_count ?? "—"}`,
+            `Points projetés (2 vues)        ${
+              Number(overlayProfile.views?.side?.contact_points_rendered ?? 0) +
+              Number(overlayProfile.views?.top?.contact_points_rendered ?? 0)
+            }`,
+            `Éléments graphiques générés    ${overlayProfile.graphic_element_count ?? "—"}`,
+            `Taille SVG                     ${overlayProfile.payload_bytes ?? overlayProfile.svg_bytes ?? "—"} octets`,
+          );
+        }
+        if (poseConstraints) {
+          const constraints = poseConstraints;
+          lines.push(
+            "",
+            "Contraintes de pose",
+            `Durée enveloppe                  ${constraints.envelope_duration_ms == null ? "—" : `${Number(constraints.envelope_duration_ms).toFixed(1)} ms`}`,
+            `Durée génération poses           ${constraints.pose_generation_duration_ms == null ? "—" : `${Number(constraints.pose_generation_duration_ms).toFixed(1)} ms`}`,
+            `Poses candidates                 ${constraints.candidate_pose_count ?? "—"}`,
+            `Poses acceptées                  ${constraints.accepted_pose_count ?? "—"}`,
+            `Poses rejetées                   ${constraints.rejected_pose_count ?? "—"}`,
+            `Poses simulées                   ${constraints.simulated_pose_count ?? "—"}`,
+          );
+          const reasons = constraints.rejections_by_reason ?? {};
+          for (const [reason, count] of Object.entries(reasons)) {
+            lines.push(`  ${reason.padEnd(29)} ${count}`);
+          }
+        }
+        if (scraperPipeline) {
+          lines.push("", "Pipeline Scraper3D");
+          if (scraperPipeline.loss_stage) {
+            lines.push(`Perte détectée à l'étape     ${scraperPipeline.loss_stage}`);
+          }
+          for (const [stage, detail] of Object.entries(scraperPipeline.stages ?? {})) {
+            const status = detail?.ok === false ? "KO" : detail?.ok === true ? "OK" : "—";
+            lines.push(`${stage.padEnd(31)} ${status}`);
+          }
+        }
+        if (error) {
+          lines.push("", `${error.exception_type ?? "Exception"}: ${error.message ?? error}`);
+          if (error.traceback) lines.push("", error.traceback);
+        }
+        diagnosticContent.textContent = lines.join("\n");
+      }
+
+      function formatServerError(result, fallbackMessage) {
+        if (!result || typeof result !== "object") {
+          return fallbackMessage;
+        }
+        let message = result.message || result.error || fallbackMessage;
+        if (result.path) {
+          message += ` (${result.method ?? "POST"} ${result.path})`;
+        }
+        if (Array.isArray(result.available_endpoints) && result.available_endpoints.length) {
+          message += ` — endpoints disponibles : ${result.available_endpoints.join(", ")}`;
+        }
+        if (result.exception_type) {
+          message = `[${result.exception_type}] ${message}`;
+        }
+        if (result.stage) {
+          message += ` (étape: ${result.stage})`;
+        }
+        if (result.request_id) {
+          message += ` [req=${String(result.request_id).slice(0, 8)}]`;
+        }
+        if (result.traceback) {
+          message += `\n\n${result.traceback}`;
+        }
+        return message;
+      }
+
+      async function readJsonResponse(response) {
+        const text = await response.text();
+        if (!text) {
+          return { error: `Réponse vide (${response.status})` };
+        }
+        try {
+          return JSON.parse(text);
+        } catch {
+          return {
+            error: `Réponse serveur non JSON (${response.status})`,
+            message: text.slice(0, 500),
+          };
+        }
+      }
+
+      function showError(message) {
+        clearGraphics("Échec du chargement");
+        setStatus(message.split("\n")[0], "error");
+        console.error("[viewer]", message);
+      }
+
+      function clearGraphics(message = "Sélectionnez un fichier STEP") {
+        activeModelLoaded = false;
+        currentModelId = null;
+        completedSimulation = null;
+        poseRequestSequence += 1;
+        poseSelect.replaceChildren(new Option("Aucune simulation", ""));
+        poseSelect.disabled = true;
+        scraperPoseProof.textContent = "Construisez ou simulez le racloir pour afficher le Scraper3D";
+        syncPoseNavigator();
+        metricsPanel.innerHTML =
+          '<p class="metrics-empty">Lancez une simulation pour afficher les métriques ContactResult.</p>';
+        for (const stage of Object.values(stages)) {
+          showStagePlaceholder(stage, message);
+        }
+        document.getElementById("side-dims").replaceChildren();
+        document.getElementById("top-dims").replaceChildren();
+        document.getElementById("model-title").textContent =
+          "Aucun CanonicalModel3D chargé";
+        document.getElementById("model-proof").textContent = "@visualization_only";
+        syncToolbarState(false);
+      }
+
+      async function sha256Hex(bytes) {
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        return Array.from(new Uint8Array(digest))
+          .map((value) => value.toString(16).padStart(2, "0"))
+          .join("");
+      }
+
+      function resolveDisplayedView(data, viewName) {
+        const views = data.displayed_views ?? {};
+        if (views[viewName]) {
+          return views[viewName];
+        }
+        if (viewName === "side" && views.profile) {
+          return { ...views.profile, view_name: "side", plane: "XZ", view_axis: "Y" };
+        }
+        throw new Error(`Vue ${viewName} absente du manifest`);
+      }
+
+      function formatViewLabel(viewName, view) {
+        const defaults = VIEW_SPECS[viewName];
+        const labelFr = defaults.labelFr;
+        const labelEn = view.label_en ?? defaults.labelEn;
+        const plane = view.plane ?? defaults.plane;
+        const viewAxis = view.view_axis ?? defaults.viewAxis;
+        return `${labelFr} (${labelEn}) — plan ${plane}, selon ${viewAxis}`;
+      }
+
+      async function fetchSvg(viewName, view, baseUrl, signal) {
+        const url = `${baseUrl}${view.filename}?sha256=${view.sha256}`;
+        const response = await fetch(url, { cache: "no-store", signal });
+        if (!response.ok) throw new Error(`Impossible de charger ${view.filename}`);
+        const bytes = await response.arrayBuffer();
+        const actualHash = await sha256Hex(bytes);
+        if (actualHash !== view.sha256) {
+          throw new Error(`Hash SVG invalide pour ${view.filename}`);
+        }
+
+        const text = new TextDecoder().decode(bytes);
+        const documentSvg = new DOMParser().parseFromString(text, "image/svg+xml");
+        const svg = documentSvg.documentElement;
+        const expectedPlane = view.plane ?? VIEW_SPECS[viewName].plane;
+        if (
+          svg.tagName.toLowerCase() !== "svg" ||
+          svg.dataset.canonicalMeshSha256 !== view.canonical_mesh_sha256 ||
+          (svg.dataset.plane && svg.dataset.plane !== expectedPlane)
+        ) {
+          throw new Error(`Provenance ou plan SVG invalide pour ${view.filename}`);
+        }
+        return document.importNode(svg, true);
+      }
+
+      function applyLayerVisibility() {
+        for (const toggle of document.querySelectorAll("[data-layer-toggle]")) {
+          const layerName = toggle.dataset.layerToggle;
+          for (const layer of document.querySelectorAll(`[data-layer="${layerName}"]`)) {
+            layer.style.display = toggle.checked ? "" : "none";
+          }
+        }
+        const groups = {
+          pot: ["contour", "wireframe", "vertices", "bounding-box", "principal-axes"],
+          scraper: ["scraper-volume", "scraper-contour"],
+          envelope: ["interior-envelope"],
+          trajectory: ["scraper-trajectory"],
+          collisions: ["collision-faces", "collision-points"],
+        };
+        for (const toggle of document.querySelectorAll("[data-visibility-toggle]")) {
+          for (const layerName of groups[toggle.dataset.visibilityToggle] ?? []) {
+            for (const layer of document.querySelectorAll(`[data-layer="${layerName}"]`)) {
+              if (!toggle.checked) {
+                layer.style.display = "none";
+              } else {
+                const directToggle = document.querySelector(
+                  `[data-layer-toggle="${layerName}"]`,
+                );
+                layer.style.display = directToggle && !directToggle.checked ? "none" : "";
+              }
+            }
+          }
+        }
+        if (!overlaysMasterVisible) {
+          for (const layerName of OVERLAY_LAYER_NAMES) {
+            for (const layer of document.querySelectorAll(`[data-layer="${layerName}"]`)) {
+              layer.style.display = "none";
+            }
+          }
+        }
+        toolbarToggleEnvelope.dataset.active = String(envelopeToggle.checked);
+        toolbarToggleTrajectory.dataset.active = String(trajectoryToggle.checked);
+      }
+
+      function removeContactLayers(svgRoot) {
+        for (const layerName of CONTACT_LAYER_NAMES) {
+          for (const layer of svgRoot.querySelectorAll(`[data-layer="${layerName}"]`)) {
+            layer.remove();
+          }
+        }
+      }
+
+      function injectContactLayers(svgRoot, layerMap) {
+        removeContactLayers(svgRoot);
+        if (!layerMap) return;
+        const parser = new DOMParser();
+        for (const groupMarkup of Object.values(layerMap)) {
+          const doc = parser.parseFromString(
+            `<svg xmlns="http://www.w3.org/2000/svg">${groupMarkup}</svg>`,
+            "image/svg+xml",
+          );
+          const group = doc.documentElement.firstElementChild;
+          if (group) {
+            svgRoot.appendChild(document.importNode(group, true));
+          }
+        }
+      }
+
+      function formatSurface(valueMm2, fallbackPercent) {
+        if (valueMm2 != null) {
+          return `${Number(valueMm2).toFixed(1)} mm²`;
+        }
+        return `${Number(fallbackPercent).toFixed(1)} %`;
+      }
+
+      function formatOptional(value, unit = "") {
+        if (value == null || Number.isNaN(Number(value))) {
+          return "—";
+        }
+        return `${Number(value).toFixed(2)}${unit}`;
+      }
+
+      function renderMetricsPanel(metrics) {
+        if (!metrics) {
+          metricsPanel.innerHTML =
+            '<p class="metrics-empty">Lancez une simulation pour afficher les métriques ContactResult.</p>';
+          return;
+        }
+        const rows = [
+          ["Coverage Score", `${metrics.coverage_score_percent.toFixed(1)} %`],
+          [
+            "Surface couverte",
+            formatSurface(metrics.covered_surface_mm2, metrics.covered_surface_percent),
+          ],
+          [
+            "Surface non couverte",
+            formatSurface(metrics.uncovered_surface_mm2, metrics.uncovered_surface_percent),
+          ],
+          [
+            "Faces couvertes / total",
+            `${metrics.covered_face_count} / ${metrics.total_face_count}`,
+          ],
+          ["Points de contact", String(metrics.contact_point_count)],
+          ["Distance moyenne", formatOptional(metrics.mean_distance_mm, " mm")],
+          ["Distance maximale", formatOptional(metrics.max_distance_mm, " mm")],
+          ["Collision", metrics.collision_label ?? (metrics.has_collision ? "Oui" : "Non")],
+          [
+            "Profondeur max. pénétration",
+            formatOptional(metrics.max_penetration_depth_mm, " mm"),
+          ],
+          [
+            "Temps de calcul",
+            formatOptional(metrics.simulation_duration_ms, " ms"),
+          ],
+        ];
+        metricsPanel.replaceChildren();
+        for (const [label, value] of rows) {
+          const row = document.createElement("div");
+          row.className = "metric-row";
+          row.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+          metricsPanel.append(row);
+        }
+        lastContactMetrics = metrics;
+        renderDiagnosticSummary(metrics);
+      }
+
+      function applyContactOverlays(payload) {
+        const sideSvg = stages.side.querySelector("svg");
+        const topSvg = stages.top.querySelector("svg");
+        if (!sideSvg || !topSvg) {
+          throw new Error("SVG de base introuvable — rechargez le modèle");
+        }
+        const sideLayers = { ...(payload.overlays?.side ?? {}) };
+        const topLayers = { ...(payload.overlays?.top ?? {}) };
+        injectContactLayers(sideSvg, sideLayers);
+        injectContactLayers(topSvg, topLayers);
+        applyStoredOverlays();
+        applyLayerVisibility();
+        if (payload.metrics) renderMetricsPanel(payload.metrics);
+      }
+
+      async function initializePoseSelector(simulationState) {
+        const manifestUrl =
+          `/api/simulations/${encodeURIComponent(simulationState.simulation_id)}/poses`;
+        const response = await fetch(manifestUrl, { cache: "no-store" });
+        const manifest = await readJsonResponse(response);
+        if (!response.ok) {
+          throw new Error(
+            formatServerError(manifest, `Échec du chargement des poses (${response.status})`),
+          );
+        }
+        completedSimulation = {
+          ...(completedSimulation ?? {}),
+          ...simulationState,
+          poseUrlTemplate: manifest.pose_url_template,
+          scraperPipeline: manifest.scraper_pipeline ?? completedSimulation?.scraperPipeline ?? null,
+          referencePose: Boolean(manifest.reference_pose),
+        };
+        poseManifestEntries = manifest.poses ?? [];
+        poseSelect.replaceChildren();
+        if (manifest.pose_count === 0) {
+          poseSelect.append(new Option("Aucune pose capturée", ""));
+          poseSelect.disabled = true;
+          currentPoseIndex = 0;
+          syncPoseNavigator();
+          scraperPoseProof.textContent = formatScraperPipelineProof(
+            manifest.scraper_pipeline,
+          );
+          renderDiagnosticSummary(null, null, manifest.scraper_pipeline);
+          return;
+        }
+        for (let index = 0; index < manifest.pose_count; index += 1) {
+          const option = document.createElement("option");
+          option.value = String(index);
+          option.textContent = `Pose ${index + 1} / ${manifest.pose_count}`;
+          poseSelect.append(option);
+        }
+        poseSelect.disabled = manifest.pose_count === 0;
+        currentPoseIndex = 0;
+        if (manifest.pose_count > 0) await displaySimulationPose(0);
+      }
+
+      async function displaySimulationPose(index) {
+        if (!completedSimulation?.poseUrlTemplate) return;
+        const sequence = ++poseRequestSequence;
+        poseSelect.disabled = true;
+        setStatus(`Projection de la pose ${index + 1}…`, "loading");
+        try {
+          const url = completedSimulation.poseUrlTemplate.replace(
+            "{index}",
+            encodeURIComponent(index),
+          );
+          const response = await fetch(url, { cache: "no-store" });
+          const pose = await readJsonResponse(response);
+          if (!response.ok) {
+            throw new Error(
+              formatServerError(pose, `Échec de la pose (${response.status})`),
+            );
+          }
+          if (sequence !== poseRequestSequence) return;
+          currentPoseIndex = pose.pose_index;
+          applyContactOverlays(pose);
+          poseSelect.value = String(pose.pose_index);
+          renderPoseInfo(pose.pose ?? poseManifestEntries[currentPoseIndex]?.pose, currentPoseIndex, pose.pose_count);
+          scraperPoseProof.textContent = formatScraperPoseProof(
+            pose,
+            completedSimulation?.scraperPipeline,
+          );
+          setStatus(`Pose ${pose.pose_index + 1} affichée`, "ready");
+        } catch (error) {
+          scraperPoseProof.textContent =
+            `Scraper3D — échec projection pose (étape: pose_fetch) : ${error.message}`;
+          throw error;
+        } finally {
+          poseSelect.disabled = false;
+        }
+      }
+
+      async function simulateContact() {
+        if (!activeModelLoaded || !currentModelId) {
+          setStatus("Importez un modèle STEP avant la simulation", "error");
+          return;
+        }
+        setSimulationControls(true);
+        setStatus("Démarrage de la simulation…", "loading");
+        simulationPollController = new AbortController();
+        try {
+          const response = await fetch(API.simulateContact, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_id: currentModelId }),
+            cache: "no-store",
+            signal: simulationPollController.signal,
+          });
+          const started = await readJsonResponse(response);
+          if (!response.ok) {
+            throw new Error(
+              formatServerError(started, `Échec simulation (${response.status})`),
+            );
+          }
+          activeSimulation = started;
+          renderSimulationState(started);
+
+          let state = started;
+          while (!["completed", "failed", "cancelled"].includes(state.state)) {
+            await sleep(500);
+            const statusResponse = await fetch(started.status_url, {
+              cache: "no-store",
+              signal: simulationPollController.signal,
+            });
+            state = await readJsonResponse(statusResponse);
+            if (!statusResponse.ok) {
+              throw new Error(
+                formatServerError(state, `Échec du suivi (${statusResponse.status})`),
+              );
+            }
+            activeSimulation = { ...state, status_url: started.status_url, cancel_url: started.cancel_url };
+            renderSimulationState(state);
+          }
+
+          if (state.state === "cancelled") {
+            setStatus("Simulation annulée", "idle");
+            return;
+          }
+          if (state.state === "failed") {
+            renderPerformanceProfile(state.profile_ms, state.error);
+            const error = state.error ?? {};
+            const message = `[${error.exception_type ?? "SimulationError"}] ${
+              error.message ?? "La simulation a échoué"
+            }`;
+            if (error.traceback) console.error("[viewer:contact]\n", error.traceback);
+            throw new Error(message);
+          }
+
+          const transferStarted = performance.now();
+          const resultResponse = await fetch(state.result_url, {
+            cache: "no-store",
+            signal: simulationPollController.signal,
+          });
+          const result = await readJsonResponse(resultResponse);
+          const frontendTransferMs = performance.now() - transferStarted;
+          if (!resultResponse.ok) {
+            throw new Error(
+              formatServerError(result, `Échec du transfert (${resultResponse.status})`),
+            );
+          }
+
+          const refreshStarted = performance.now();
+          renderMetricsPanel(result.metrics);
+          scraperPoseProof.textContent = formatScraperPipelineProof(
+            result.scraper_pipeline,
+            result.trajectory,
+          );
+          interiorContourOverlays = {
+            side: { "interior-envelope": result.overlays?.side?.["interior-envelope"] },
+            top: { "interior-envelope": result.overlays?.top?.["interior-envelope"] },
+          };
+          trajectoryOverlays = {
+            side: { "scraper-trajectory": result.overlays?.side?.["scraper-trajectory"] },
+            top: { "scraper-trajectory": result.overlays?.top?.["scraper-trajectory"] },
+          };
+          completedSimulation = {
+            pose_constraints: result.pose_constraints,
+            scraperPipeline: result.scraper_pipeline ?? null,
+          };
+          await initializePoseSelector(state);
+          await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+          const uiRefreshMs = performance.now() - refreshStarted;
+          const profile = {
+            ...state.profile_ms,
+            frontend_transfer: frontendTransferMs,
+            ui_refresh: uiRefreshMs,
+          };
+          profile.total = Number(state.elapsed_ms ?? 0) + frontendTransferMs + uiRefreshMs;
+          renderPerformanceProfile(
+            profile,
+            null,
+            result.overlay_profile,
+            result.pose_constraints,
+            result.scraper_pipeline,
+          );
+          console.info("[viewer:simulation-profile]", {
+            timings_ms: profile,
+            overlay: result.overlay_profile,
+          });
+          setStatus("Simulation contact terminée", "ready");
+        } catch (error) {
+          if (error.name === "AbortError" && !activeSimulation) return;
+          setStatus(error.message.split("\n")[0], "error");
+          console.error("[viewer:contact]", error);
+        } finally {
+          activeSimulation = null;
+          simulationPollController = null;
+          setSimulationControls(false);
+        }
+      }
+
+      async function cancelSimulation() {
+        if (!activeSimulation?.cancel_url) return;
+        cancelButton.disabled = true;
+        try {
+          const response = await fetch(activeSimulation.cancel_url, {
+            method: "DELETE",
+            cache: "no-store",
+          });
+          const state = await readJsonResponse(response);
+          if (!response.ok) {
+            throw new Error(
+              formatServerError(state, `Échec de l'annulation (${response.status})`),
+            );
+          }
+          simulationPollController?.abort();
+          activeSimulation = null;
+          setStatus("Simulation annulée — application disponible", "idle");
+        } catch (error) {
+          setStatus(error.message.split("\n")[0], "error");
+          console.error("[viewer:cancel]", error);
+        } finally {
+          cancelButton.disabled = false;
+          setSimulationControls(false);
+        }
+      }
+
+      function displayMetadata(data) {
+        const [dx, dy, dz] = data.dimensions_mm;
+        const sideView = resolveDisplayedView(data, "side");
+        const topView = resolveDisplayedView(data, "top");
+
+        viewLabels.side.textContent = formatViewLabel("side", sideView);
+        viewLabels.top.textContent = formatViewLabel("top", topView);
+
+        document.getElementById("side-dims").innerHTML =
+          `<strong>${Math.max(dx, dz).toFixed(1)} × ${dy.toFixed(1)} mm</strong>` +
+          `<span>${sideView.dimension_axes ?? VIEW_SPECS.side.dimensionAxes} — vue selon ${sideView.view_axis ?? VIEW_SPECS.side.viewAxis}</span>`;
+        document.getElementById("top-dims").innerHTML =
+          `<strong>${dx.toFixed(1)} × ${dz.toFixed(1)} mm</strong>` +
+          `<span>${topView.dimension_axes ?? VIEW_SPECS.top.dimensionAxes} — vue selon ${topView.view_axis ?? VIEW_SPECS.top.viewAxis}</span>`;
+        document.getElementById("model-title").textContent =
+          data.source_path.split(/[\\/]/).pop();
+        document.getElementById("model-proof").textContent =
+          `model=${data.model_id} · mesh=${data.canonical_mesh_sha256}`;
+        profileReconstruction = data.profile_reconstruction ?? null;
+        renderDiagnosticSummary(lastContactMetrics);
+      }
+
+      async function loadModel(metadataUrl, baseUrl, sequence, signal) {
+        const metadataResponse = await fetch(
+          `${metadataUrl}?request=${encodeURIComponent(sequence)}`,
+          { cache: "no-store", signal },
+        );
+        if (!metadataResponse.ok) throw new Error("Manifest de visualisation introuvable");
+        const data = await metadataResponse.json();
+        const sideView = resolveDisplayedView(data, "side");
+        const topView = resolveDisplayedView(data, "top");
+
+        const [sideSvg, topSvg] = await Promise.all([
+          fetchSvg("side", sideView, baseUrl, signal),
+          fetchSvg("top", topView, baseUrl, signal),
+        ]);
+        if (sequence !== loadSequence) return;
+
+        mountSvgInStage(stages.side, sideSvg);
+        mountSvgInStage(stages.top, topSvg);
+        applyLayerVisibility();
+        displayMetadata(data);
+        activeModelLoaded = true;
+        currentModelId = data.model_id;
+        currentMetadataUrl = metadataUrl;
+        currentBaseUrl = baseUrl;
+        history.replaceState(
+          null,
+          "",
+          `?model_id=${encodeURIComponent(data.model_id)}&mesh_sha256=${data.canonical_mesh_sha256}`,
+        );
+        setStatus("Modèle chargé", "ready");
+        syncToolbarState(false);
+      }
+
+      async function uploadStep(file) {
+        const extension = file.name.split(".").pop().toLowerCase();
+        if (!["step", "stp"].includes(extension)) {
+          setStatus("Sélectionnez un fichier .step ou .stp", "error");
+          return;
+        }
+
+        const sequence = ++loadSequence;
+        activeRequest?.abort();
+        activeRequest = new AbortController();
+        lastUploadedFile = file;
+        clearGraphics("Import et tessellation en cours…");
+        setStatus(`Import de ${file.name}…`, "loading");
+
+        try {
+          const response = await fetch(API.importStep, {
+            method: "POST",
+            headers: { "X-Filename": encodeURIComponent(file.name) },
+            body: file,
+            cache: "no-store",
+            signal: activeRequest.signal,
+          });
+          const result = await readJsonResponse(response);
+          if (!response.ok) {
+            throw new Error(
+              formatServerError(result, `Échec de l'import (${response.status})`),
+            );
+          }
+          if (sequence !== loadSequence) return;
+          await loadModel(result.metadata_url, result.base_url, sequence, activeRequest.signal);
+        } catch (error) {
+          if (error.name === "AbortError") return;
+          if (error.message === "Failed to fetch") {
+            showError(
+              "Connexion interrompue (ERR_CONNECTION_RESET). " +
+                "Consultez le terminal Python pour la stack trace détaillée.",
+            );
+          } else {
+            showError(error.message);
+          }
+        } finally {
+          fileInput.value = "";
+        }
+      }
+
+      for (const toggle of document.querySelectorAll("[data-layer-toggle]")) {
+        toggle.addEventListener("change", applyLayerVisibility);
+      }
+      for (const toggle of document.querySelectorAll("[data-visibility-toggle]")) {
+        toggle.addEventListener("change", applyLayerVisibility);
+      }
+      simulateButton.addEventListener("click", simulateContact);
+      cancelButton.addEventListener("click", cancelSimulation);
+      posePrevButton.addEventListener("click", () => {
+        if (currentPoseIndex <= 0) return;
+        displaySimulationPose(currentPoseIndex - 1).catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      poseNextButton.addEventListener("click", () => {
+        if (currentPoseIndex >= poseManifestEntries.length - 1) return;
+        displaySimulationPose(currentPoseIndex + 1).catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      poseSelect.addEventListener("change", () => {
+        displaySimulationPose(Number(poseSelect.value)).catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+          console.error("[viewer:pose]", error);
+        });
+      });
+      envelopeToggle.addEventListener("change", () => {
+        if (envelopeToggle.checked && !interiorContourOverlays && activeModelLoaded) {
+          fetchInteriorContour().catch((error) => {
+            envelopeToggle.checked = false;
+            setStatus(error.message.split("\n")[0], "error");
+          });
+          return;
+        }
+        applyLayerVisibility();
+      });
+      trajectoryToggle.addEventListener("change", applyLayerVisibility);
+      fileInput.addEventListener("change", () => {
+        const [file] = fileInput.files;
+        if (file) uploadStep(file);
+      });
+
+      document.getElementById("toolbar-load-step").addEventListener("click", () => {
+        fileInput.click();
+      });
+      toolbarReload.addEventListener("click", () => {
+        reloadCurrentStep().catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      toolbarReset.addEventListener("click", resetApplication);
+      toolbarToggleOverlays.addEventListener("click", toggleOverlaysMaster);
+      toolbarToggleEnvelope.addEventListener("click", toggleEnvelopeMaster);
+      toolbarToggleTrajectory.addEventListener("click", toggleTrajectoryMaster);
+      toolbarBuildScraper.addEventListener("click", () => {
+        buildScraperOnly();
+      });
+
+      async function initialize() {
+        initializeAccordions();
+        clearGraphics();
+        syncPoseNavigator();
+        syncToolbarState(false);
+        try {
+          const runtimeResponse = await fetch(API.runtime, { cache: "no-store" });
+          if (runtimeResponse.ok) {
+            const runtime = await runtimeResponse.json();
+            devMode = Boolean(runtime.dev_mode);
+            diagnosticPanel.dataset.enabled = String(devMode);
+            if (!devMode) {
+              diagnosticContent.textContent =
+                "Profil développement disponible en mode --dev.";
+            }
+          }
+        } catch (error) {
+          console.warn("[viewer:runtime]", error);
+        }
+        const modelId = new URLSearchParams(location.search).get("model_id");
+        if (!modelId) return;
+        const sequence = ++loadSequence;
+        activeRequest = new AbortController();
+        setStatus("Chargement du modèle…", "loading");
+        try {
+          currentMetadataUrl = `/${encodeURIComponent(modelId)}/metadata.json`;
+          currentBaseUrl = `/${encodeURIComponent(modelId)}/`;
+          await loadModel(
+            currentMetadataUrl,
+            currentBaseUrl,
+            sequence,
+            activeRequest.signal,
+          );
+        } catch (error) {
+          clearGraphics();
+          setStatus(error.message, "error");
+        }
+      }
+
+      window.addEventListener("pagehide", () => {
+        if (activeSimulation?.cancel_url) {
+          fetch(activeSimulation.cancel_url, {
+            method: "DELETE",
+            cache: "no-store",
+            keepalive: true,
+          }).catch(() => {});
+        }
+      });
+
+      initialize();
+    </script>
+  </body>
+</html>

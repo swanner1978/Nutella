@@ -1,0 +1,78 @@
+"""Re-exports for domain models."""
+
+from nutella_scraper.domain.models.canonical import (
+    BoundingBox,
+    CanonicalModel3D,
+    GeometricMetadata,
+    JarCanonicalModel,
+    JarProfilePoint,
+    MeshData,
+    RigidTransform,
+)
+from nutella_scraper.domain.models.contact import (
+    CollisionPoint3D,
+    CollisionResult,
+    ContactOverlayData,
+    ContactPoint3D,
+    ContactResult,
+    ContactSimulationConfig,
+    EvaluationResult,
+    TrajectoryConfig,
+    Violation,
+)
+from nutella_scraper.domain.models.design_space import (
+    DesignCandidate,
+    DesignParameter,
+    DesignSpace,
+    ObjectiveSpec,
+    OptimizationBudget,
+    OptimizationResult,
+    OptimizationRun,
+    ParameterSample,
+    ParameterType,
+)
+from nutella_scraper.domain.models.scraper import ScraperGeometry, ScraperPose
+from nutella_scraper.domain.models.views import (
+    ProjectedView,
+    ProjectionMetadata,
+    RenderedFrame,
+    SvgLayer,
+    ViewOverlayPayload,
+    ViewProjectionCache,
+)
+
+__all__ = [
+    "BoundingBox",
+    "CanonicalModel3D",
+    "GeometricMetadata",
+    "CollisionPoint3D",
+    "CollisionResult",
+    "ContactOverlayData",
+    "ContactPoint3D",
+    "ContactResult",
+    "ContactSimulationConfig",
+    "DesignCandidate",
+    "DesignParameter",
+    "DesignSpace",
+    "EvaluationResult",
+    "JarCanonicalModel",
+    "JarProfilePoint",
+    "MeshData",
+    "ObjectiveSpec",
+    "OptimizationBudget",
+    "OptimizationResult",
+    "OptimizationRun",
+    "ParameterSample",
+    "ParameterType",
+    "ProjectedView",
+    "ProjectionMetadata",
+    "RenderedFrame",
+    "RigidTransform",
+    "ScraperGeometry",
+    "ScraperPose",
+    "SvgLayer",
+    "TrajectoryConfig",
+    "ViewOverlayPayload",
+    "ViewProjectionCache",
+    "Violation",
+]

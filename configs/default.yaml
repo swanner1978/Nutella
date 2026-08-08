@@ -1,0 +1,22 @@
+app:
+  name: nutella-scraper
+  version: "0.1.0"
+  log_level: INFO
+
+paths:
+  data_dir: data
+  models_dir: data/models
+  exports_dir: data/exports
+
+simulation:
+  contact_threshold_mm: 0.5
+  trajectory_steps: 100
+
+optimization:
+  default_seed: 42
+  max_trials: 200
+
+fdm:
+  min_wall_thickness_mm: 1.2
+  max_overhang_angle_deg: 45
+  clearance_compensation_mm: 0.15

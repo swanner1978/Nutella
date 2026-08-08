@@ -1,0 +1,11 @@
+trajectory:
+  type: rotational_vertical
+  angular_step_deg: 5.0
+  vertical_step_mm: 2.0
+
+contact:
+  threshold_mm: 0.5
+  clearance_mm: 0.15
+
+mesh:
+  tolerance_mm: 0.1

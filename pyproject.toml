@@ -1,0 +1,139 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nutella-scraper"
+version = "0.1.0"
+description = "Optimisation automatique de la geometrie d'un racloir Nutella (FDM)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Nutella Scraper Team" }]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "typer>=0.14.0",
+    "rich>=13.9.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "pyyaml>=6.0.2",
+    "sqlalchemy>=2.0.36",
+    "numpy>=2.1.0",
+    "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+# Geometry import pipeline (STEP/STL → CanonicalModel3D)
+cad_import = [
+    "trimesh[easy]>=4.5.0",
+    "cascadio>=0.0.16",
+    "cadquery-ocp>=7.9.0",
+]
+compute = [
+    "trimesh[easy]>=4.5.0",
+    "scipy>=1.14.0",
+]
+optimization = [
+    "optuna>=4.1.0",
+    "nlopt>=2.9.0",
+]
+cad = [
+    "pywin32>=308; sys_platform == 'win32'",
+]
+# Dev tooling; includes cad_import runtime deps so pytest collection succeeds.
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "import-linter>=2.1.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "trimesh[easy]>=4.5.0",
+    "cascadio>=0.0.16",
+    "cadquery-ocp>=7.9.0",
+]
+# Convenience alias equivalent to: pip install -e ".[cad_import,dev]"
+test = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "import-linter>=2.1.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "trimesh[easy]>=4.5.0",
+    "cascadio>=0.0.16",
+    "cadquery-ocp>=7.9.0",
+]
+all = [
+    "nutella-scraper[cad_import,compute,optimization,cad,dev]",
+]
+
+[project.scripts]
+nutella-scraper = "nutella_scraper.cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["nutella_scraper"]
+mypy_path = "src"
+
+[tool.importlinter]
+root_packages = ["nutella_scraper"]
+
+[[tool.importlinter.contracts]]
+name = "Visualization must not depend on Optimization"
+type = "forbidden"
+source_modules = ["nutella_scraper.engines.visualization"]
+forbidden_modules = ["nutella_scraper.engines.optimization"]
+
+[[tool.importlinter.contracts]]
+name = "Optimization must not depend on Visualization"
+type = "forbidden"
+source_modules = ["nutella_scraper.engines.optimization"]
+forbidden_modules = ["nutella_scraper.engines.visualization"]
+
+[[tool.importlinter.contracts]]
+name = "Compute must not depend on Visualization"
+type = "forbidden"
+source_modules = ["nutella_scraper.engines.compute"]
+forbidden_modules = ["nutella_scraper.engines.visualization"]
+
+[[tool.importlinter.contracts]]
+name = "Domain views must not depend on Compute"
+type = "forbidden"
+source_modules = ["nutella_scraper.domain.models.views"]
+forbidden_modules = ["nutella_scraper.engines.compute"]
+
+# PEP 735 dependency groups (pip >= 24.1, uv)
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "import-linter>=2.1.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "trimesh[easy]>=4.5.0",
+    "cascadio>=0.0.16",
+    "cadquery-ocp>=7.9.0",
+]
+cad_import = [
+    "trimesh[easy]>=4.5.0",
+    "cascadio>=0.0.16",
+    "cadquery-ocp>=7.9.0",
+]

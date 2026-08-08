@@ -1,0 +1,12 @@
+{
+  "id": "nutella_400g",
+  "version": "1",
+  "meridian_profile": [
+    { "z_mm": 0, "r_mm": 47.5 },
+    { "z_mm": 80, "r_mm": 49.0 },
+    { "z_mm": 95, "r_mm": 35.0 }
+  ],
+  "neck_inner_diameter_mm": 58.0,
+  "total_height_mm": 105.0,
+  "source": "manual_measurement"
+}

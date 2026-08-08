@@ -1,0 +1,10 @@
+id: racloir_v1
+version: "1"
+description: Parametric scraper template (SolidWorks driving dimensions)
+parameters:
+  width_mm: 18.0
+  length_mm: 95.0
+  thickness_mm: 2.5
+  tip_radius_mm: 1.5
+  curvature_radius_mm: 35.0
+  bend_angle_deg: 12.0
