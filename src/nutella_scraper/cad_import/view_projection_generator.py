@@ -29,7 +29,7 @@ class ViewProjectionConfig:
 
 class ViewProjectionGenerator:
     """
-    Generates side (XZ) and top (XY) views from CanonicalModel3D.
+    Generates profile (XY) and top (XZ) views from CanonicalModel3D (Y-up jar).
 
     @visualization_only — output must never feed ContactSimulator or OptimizationEngine.
     """
@@ -39,21 +39,21 @@ class ViewProjectionGenerator:
 
     def generate(self, model: CanonicalModel3D) -> ViewProjectionCache:
         mesh = _mesh_data_to_trimesh(model.mesh)
-        profile_svg = self._render_projection(mesh, plane="XZ")
-        top_svg = self._render_projection(mesh, plane="XY")
+        profile_svg = self._render_projection(mesh, plane="XY")
+        top_svg = self._render_projection(mesh, plane="XZ")
 
         cfg = self._config
         profile_meta = ProjectionMetadata(
-            plane="XZ",
-            camera={"origin": "side", "view_axis": "Y", "up": "Z"},
-            scale=self._compute_scale(mesh, plane="XZ"),
+            plane="XY",
+            camera={"origin": "side", "view_axis": "Z", "up": "Y"},
+            scale=self._compute_scale(mesh, plane="XY"),
             width_px=cfg.width_px,
             height_px=cfg.height_px,
         )
         top_meta = ProjectionMetadata(
-            plane="XY",
-            camera={"origin": "top", "view_axis": "Z", "up": "Y"},
-            scale=self._compute_scale(mesh, plane="XY"),
+            plane="XZ",
+            camera={"origin": "top", "view_axis": "Y", "up": "Z"},
+            scale=self._compute_scale(mesh, plane="XZ"),
             width_px=cfg.width_px,
             height_px=cfg.height_px,
         )
@@ -61,13 +61,13 @@ class ViewProjectionGenerator:
         return ViewProjectionCache(
             model_id=model.id,
             profile_view=ProjectedView(
-                plane="XZ",
+                plane="XY",
                 asset_path=None,
                 svg_content=profile_svg,
                 metadata=profile_meta,
             ),
             top_view=ProjectedView(
-                plane="XY",
+                plane="XZ",
                 asset_path=None,
                 svg_content=top_svg,
                 metadata=top_meta,

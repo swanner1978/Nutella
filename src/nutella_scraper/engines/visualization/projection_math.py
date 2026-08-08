@@ -13,8 +13,9 @@ VIEW_PADDING = 48
 
 PLANE_PROFILE = "PROFILE"
 PLANE_TOP_XZ = "TOP_XZ"
-PLANE_SIDE = "XZ"
-PLANE_TOP = "XY"
+# Mesh overlay planes for Y-up jar: profile = XY, top = XZ
+PLANE_SIDE = "XY"
+PLANE_TOP = "XZ"
 
 
 def project_vertices(
@@ -22,15 +23,14 @@ def project_vertices(
     plane: str,
 ) -> tuple[NDArray[np.float64], tuple[int, int], int]:
     """Project 3D vertices onto a 2D plane (same convention as the CAD viewer)."""
-    if plane in (PLANE_SIDE, "XZ"):
+    # Plane math is fixed: XZ → (X,Z) looking ±Y; XY → (X,Y) looking ±Z.
+    # PLANE_SIDE / PLANE_TOP only select which plane overlays use.
+    if plane in ("XZ", PLANE_TOP_XZ):
         indices = (0, 2)
         view_axis = 1
-    elif plane in (PLANE_TOP, "XY"):
+    elif plane == "XY":
         indices = (0, 1)
         view_axis = 2
-    elif plane == PLANE_TOP_XZ:
-        indices = (0, 2)
-        view_axis = 1
     elif plane == PLANE_PROFILE:
         raise ValueError("PROFILE plane uses analytical projection, not mesh vertices")
     else:

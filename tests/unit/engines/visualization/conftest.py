@@ -84,12 +84,12 @@ def coarse_simulation_config() -> ContactSimulationConfig:
 def sample_view_cache() -> ViewProjectionCache:
     base_svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="650" '
-        'data-plane="XZ" data-view-axis="Y">'
+        'data-plane="XY" data-view-axis="Z">'
         '<g data-layer="contour"></g></svg>'
     )
     metadata = ProjectionMetadata(
-        plane="XZ",
-        camera={"x": 0.0, "y": -1.0, "z": 0.0},
+        plane="XY",
+        camera={"x": 0.0, "y": 0.0, "z": -1.0},
         scale=1.0,
         width_px=900,
         height_px=650,
@@ -97,20 +97,20 @@ def sample_view_cache() -> ViewProjectionCache:
     return ViewProjectionCache(
         model_id="test_model",
         profile_view=ProjectedView(
-            plane="XZ",
+            plane="XY",
             asset_path=None,
             svg_content=base_svg,
             metadata=metadata,
         ),
         top_view=ProjectedView(
-            plane="XY",
+            plane="XZ",
             asset_path=None,
-            svg_content=base_svg.replace('data-plane="XZ"', 'data-plane="XY"').replace(
-                'data-view-axis="Y"', 'data-view-axis="Z"'
+            svg_content=base_svg.replace('data-plane="XY"', 'data-plane="XZ"').replace(
+                'data-view-axis="Z"', 'data-view-axis="Y"'
             ),
             metadata=ProjectionMetadata(
-                plane="XY",
-                camera={"x": 0.0, "y": 0.0, "z": -1.0},
+                plane="XZ",
+                camera={"x": 0.0, "y": -1.0, "z": 0.0},
                 scale=1.0,
                 width_px=900,
                 height_px=650,
@@ -163,15 +163,15 @@ def viewer_dir(tmp_path: Path, cylindrical_jar_canonical: object) -> Path:
         "displayed_views": {
             "side": {
                 "filename": "side_composite.svg",
-                "plane": "XZ",
-                "view_axis": "Y",
+                "plane": "XY",
+                "view_axis": "Z",
                 "sha256": "side",
                 "canonical_mesh_sha256": canonical_hash,
             },
             "top": {
                 "filename": "top_composite.svg",
-                "plane": "XY",
-                "view_axis": "Z",
+                "plane": "XZ",
+                "view_axis": "Y",
                 "sha256": "top",
                 "canonical_mesh_sha256": canonical_hash,
             },

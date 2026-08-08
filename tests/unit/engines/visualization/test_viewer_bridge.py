@@ -83,8 +83,8 @@ class TestViewerBridge:
     def test_view_cache_from_viewer_dir(self, viewer_dir: Path) -> None:
         cache = view_cache_from_viewer_dir(viewer_dir)
         assert cache.model_id == viewer_dir.name
-        assert cache.profile_view.plane == "XZ"
-        assert cache.top_view.plane == "XY"
+        assert cache.profile_view.plane == "XY"
+        assert cache.top_view.plane == "XZ"
 
     def test_build_contact_visualization_response(self, viewer_dir: Path) -> None:
         models_root = viewer_dir.parent.parent / "models"

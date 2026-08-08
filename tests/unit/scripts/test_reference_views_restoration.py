@@ -1,4 +1,4 @@
-"""Reference 2D views must use CanonicalModel3D.mesh + build_projection_svg (XZ/XY)."""
+"""Reference 2D views must use CanonicalModel3D.mesh + build_projection_svg (XY/XZ)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import pytest
 
 from nutella_scraper.cad_import import GeometryNormalizer, ImportPipeline, ModelStore
 from nutella_scraper.cad_import.trimesh_loader import TrimeshLoader
+from nutella_scraper.engines.visualization.projection_math import PLANE_SIDE, PLANE_TOP
 from scripts.demo_import import _save_views
 from scripts.visualization_helpers import VIEW_CONVENTIONS, build_projection_svg
 
@@ -22,16 +23,19 @@ def jar_step_path() -> Path:
     return path
 
 
-def test_view_conventions_are_xz_profile_and_xy_top() -> None:
-    assert VIEW_CONVENTIONS["side"]["plane"] == "XZ"
-    assert VIEW_CONVENTIONS["side"]["view_axis"] == "Y"
+def test_view_conventions_assign_xy_to_profile_and_xz_to_top() -> None:
+    """Panel mapping: profil = XY, dessus = XZ (Y-up jar)."""
+    assert VIEW_CONVENTIONS["side"]["plane"] == "XY"
+    assert VIEW_CONVENTIONS["side"]["view_axis"] == "Z"
     assert VIEW_CONVENTIONS["side"]["label_fr"] == "Vue de profil"
-    assert VIEW_CONVENTIONS["top"]["plane"] == "XY"
-    assert VIEW_CONVENTIONS["top"]["view_axis"] == "Z"
+    assert VIEW_CONVENTIONS["top"]["plane"] == "XZ"
+    assert VIEW_CONVENTIONS["top"]["view_axis"] == "Y"
     assert VIEW_CONVENTIONS["top"]["label_fr"] == "Vue de dessus"
+    assert PLANE_SIDE == VIEW_CONVENTIONS["side"]["plane"] == "XY"
+    assert PLANE_TOP == VIEW_CONVENTIONS["top"]["plane"] == "XZ"
 
 
-def test_save_views_calls_build_projection_svg_with_canonical_mesh(
+def test_save_views_assigns_projections_to_correct_panels(
     jar_step_path: Path,
     tmp_path: Path,
 ) -> None:
@@ -51,8 +55,8 @@ def test_save_views_calls_build_projection_svg_with_canonical_mesh(
         )
 
     assert mocked.call_count == 2
-    planes = {call.kwargs["plane"] for call in mocked.call_args_list}
-    assert planes == {"XZ", "XY"}
+    planes_by_call = [call.kwargs["plane"] for call in mocked.call_args_list]
+    assert set(planes_by_call) == {"XZ", "XY"}
     for call in mocked.call_args_list:
         mesh = call.args[0]
         assert len(mesh.vertices) == model.geometry.vertex_count
@@ -62,15 +66,19 @@ def test_save_views_calls_build_projection_svg_with_canonical_mesh(
     top_svg = (view_dir / "top_composite.svg").read_text(encoding="utf-8")
     side_root = ElementTree.fromstring(side_svg)
     top_root = ElementTree.fromstring(top_svg)
-    assert side_root.attrib["data-plane"] == "XZ"
-    assert side_root.attrib["data-view-axis"] == "Y"
-    assert top_root.attrib["data-plane"] == "XY"
-    assert top_root.attrib["data-view-axis"] == "Z"
+    # Vue de profil ← side_composite ← XY
+    assert side_root.attrib["data-plane"] == "XY"
+    assert side_root.attrib["data-view-axis"] == "Z"
+    # Vue de dessus ← top_composite ← XZ
+    assert top_root.attrib["data-plane"] == "XZ"
+    assert top_root.attrib["data-view-axis"] == "Y"
     assert "path" in side_svg
     assert "path" in top_svg
 
     metadata = (view_dir / "metadata.json").read_text(encoding="utf-8")
-    assert '"plane": "XZ"' in metadata
+    assert '"view_name": "side"' in metadata
     assert '"plane": "XY"' in metadata
+    assert '"view_name": "top"' in metadata
+    assert '"plane": "XZ"' in metadata
     assert "PROFILE" not in metadata
     assert "TOP_XZ" not in metadata

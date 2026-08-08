@@ -71,11 +71,11 @@ def view_cache_from_viewer_dir(view_dir: Path) -> ViewProjectionCache:
     return ViewProjectionCache(
         model_id=model_id,
         profile_view=ProjectedView(
-            plane=str(side_entry.get("plane", "XZ")),
+            plane=str(side_entry.get("plane", "XY")),
             asset_path=view_dir / side_entry["filename"],
             svg_content=side_svg,
             metadata=ProjectionMetadata(
-                plane=str(side_entry.get("plane", "XZ")),
+                plane=str(side_entry.get("plane", "XY")),
                 camera={"x": 0.0, "y": -1.0, "z": 0.0},
                 scale=1.0,
                 width_px=900,
@@ -83,11 +83,11 @@ def view_cache_from_viewer_dir(view_dir: Path) -> ViewProjectionCache:
             ),
         ),
         top_view=ProjectedView(
-            plane=str(top_entry.get("plane", "XY")),
+            plane=str(top_entry.get("plane", "XZ")),
             asset_path=view_dir / top_entry["filename"],
             svg_content=top_svg,
             metadata=ProjectionMetadata(
-                plane=str(top_entry.get("plane", "XY")),
+                plane=str(top_entry.get("plane", "XZ")),
                 camera={"x": 0.0, "y": 0.0, "z": -1.0},
                 scale=1.0,
                 width_px=900,

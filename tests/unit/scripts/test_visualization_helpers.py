@@ -230,15 +230,15 @@ def test_displayed_view_entry_documents_side_and_top_conventions() -> None:
 
 
 
-    assert side["plane"] == VIEW_CONVENTIONS["side"]["plane"] == "XZ"
+    assert side["plane"] == VIEW_CONVENTIONS["side"]["plane"] == "XY"
 
-    assert side["view_axis"] == "Y"
+    assert side["view_axis"] == "Z"
 
     assert side["label_en"] == "Profile View"
 
-    assert top["plane"] == VIEW_CONVENTIONS["top"]["plane"] == "XY"
+    assert top["plane"] == VIEW_CONVENTIONS["top"]["plane"] == "XZ"
 
-    assert top["view_axis"] == "Z"
+    assert top["view_axis"] == "Y"
 
     assert top["label_en"] == "Top View"
 

@@ -1,4 +1,4 @@
-"""Generates side (XZ) and top (XY) views from CanonicalModel3D — visualization only."""
+"""Generates profile (XY) and top (XZ) views from CanonicalModel3D — visualization only."""
 
 from __future__ import annotations
 

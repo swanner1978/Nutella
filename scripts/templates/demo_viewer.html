@@ -807,14 +807,14 @@
 
           <div class="viewer-grid">
             <section class="view-column">
-              <div class="view-label" id="side-label">Vue de profil — génératrice intérieure</div>
+              <div class="view-label" id="side-label">Vue de profil — plan XY, selon Z</div>
               <div class="view-stage" id="side-stage"></div>
               <div class="view-dims" id="side-dims"></div>
               <div class="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
             </section>
 
             <section class="view-column">
-              <div class="view-label" id="top-label">Vue de dessus — contour intérieur XZ</div>
+              <div class="view-label" id="top-label">Vue de dessus — plan XZ, selon Y</div>
               <div class="view-stage" id="top-stage"></div>
               <div class="view-dims" id="top-dims"></div>
               <div class="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
@@ -837,18 +837,18 @@
       };
       const VIEW_SPECS = {
         side: {
-          plane: "XZ",
-          viewAxis: "Y",
-          labelFr: "Vue de profil",
-          labelEn: "Profile View",
-          dimensionAxes: "X × Z",
-        },
-        top: {
           plane: "XY",
           viewAxis: "Z",
+          labelFr: "Vue de profil",
+          labelEn: "Profile View",
+          dimensionAxes: "X × Y",
+        },
+        top: {
+          plane: "XZ",
+          viewAxis: "Y",
           labelFr: "Vue de dessus",
           labelEn: "Top View",
-          dimensionAxes: "X × Y",
+          dimensionAxes: "X × Z",
         },
       };
       const API = {
@@ -1562,7 +1562,7 @@
           return views[viewName];
         }
         if (viewName === "side" && views.profile) {
-          return { ...views.profile, view_name: "side", plane: "XZ", view_axis: "Y" };
+          return { ...views.profile, view_name: "side", plane: "XY", view_axis: "Z" };
         }
         throw new Error(`Vue ${viewName} absente du manifest`);
       }

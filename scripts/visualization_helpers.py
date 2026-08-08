@@ -14,23 +14,23 @@ VIEW_WIDTH = 900
 VIEW_HEIGHT = 650
 VIEW_PADDING = 48
 
-# CAD orthographic conventions (visualization only):
-# - profile view: projection on XZ, camera looks along ±Y
-# - top view: projection on XY, camera looks along ±Z
+# CAD orthographic conventions (visualization only), Y-up jar frame:
+# - profile view: projection on XY, camera looks along ±Z (height vs width)
+# - top view: projection on XZ, camera looks along ±Y (footprint)
 VIEW_CONVENTIONS: dict[str, dict[str, str]] = {
     "side": {
-        "plane": "XZ",
-        "view_axis": "Y",
-        "label_fr": "Vue de profil",
-        "label_en": "Profile View",
-        "dimension_axes": "X × Z",
-    },
-    "top": {
         "plane": "XY",
         "view_axis": "Z",
+        "label_fr": "Vue de profil",
+        "label_en": "Profile View",
+        "dimension_axes": "X × Y",
+    },
+    "top": {
+        "plane": "XZ",
+        "view_axis": "Y",
         "label_fr": "Vue de dessus",
         "label_en": "Top View",
-        "dimension_axes": "X × Y",
+        "dimension_axes": "X × Z",
     },
 }
 
@@ -73,9 +73,9 @@ def fit_to_viewport(
 def projected_extent_mm(extents_mm: tuple[float, float, float], plane: str) -> tuple[float, float]:
     """Return the two world-axis spans visible in an orthographic projection."""
     dx, dy, dz = extents_mm
-    if plane == VIEW_CONVENTIONS["side"]["plane"]:
+    if plane == "XZ":
         return dx, dz
-    if plane == VIEW_CONVENTIONS["top"]["plane"]:
+    if plane == "XY":
         return dx, dy
     raise ValueError(f"Unsupported projection plane: {plane}")
 

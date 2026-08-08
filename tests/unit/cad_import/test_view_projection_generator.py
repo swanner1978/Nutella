@@ -14,8 +14,8 @@ class TestViewProjectionGenerator:
         cache = ViewProjectionGenerator().generate(model)
 
         assert cache.provenance == "visualization_projection"
-        assert cache.profile_view.plane == "XZ"
-        assert cache.top_view.plane == "XY"
+        assert cache.profile_view.plane == "XY"
+        assert cache.top_view.plane == "XZ"
         assert cache.profile_view.svg_content is not None
         assert "<svg" in cache.profile_view.svg_content
         assert cache.projection_metadata.get("visualization_only") is True
