@@ -13,9 +13,11 @@ VIEW_PADDING = 48
 
 PLANE_PROFILE = "PROFILE"
 PLANE_TOP_XZ = "TOP_XZ"
-# Mesh overlay planes for Y-up jar: profile = XY, top = XZ
+# Mesh overlay planes for Y-up jar (must match VIEW_CONVENTIONS)
 PLANE_SIDE = "XY"
 PLANE_TOP = "XZ"
+PLANE_LEFT = "ZY"
+PLANE_RIGHT = "-ZY"
 
 
 def project_vertices(
@@ -23,19 +25,27 @@ def project_vertices(
     plane: str,
 ) -> tuple[NDArray[np.float64], tuple[int, int], int]:
     """Project 3D vertices onto a 2D plane (same convention as the CAD viewer)."""
-    # Plane math is fixed: XZ → (X,Z) looking ±Y; XY → (X,Y) looking ±Z.
-    # PLANE_SIDE / PLANE_TOP only select which plane overlays use.
     if plane in ("XZ", PLANE_TOP_XZ):
         indices = (0, 2)
         view_axis = 1
+        coords = vertices[:, indices].astype(np.float64, copy=False)
     elif plane == "XY":
         indices = (0, 1)
         view_axis = 2
+        coords = vertices[:, indices].astype(np.float64, copy=False)
+    elif plane == "ZY":
+        indices = (2, 1)
+        view_axis = 0
+        coords = vertices[:, indices].astype(np.float64, copy=False)
+    elif plane == "-ZY":
+        indices = (2, 1)
+        view_axis = 0
+        coords = vertices[:, indices].astype(np.float64, copy=True)
+        coords[:, 0] *= -1.0
     elif plane == PLANE_PROFILE:
         raise ValueError("PROFILE plane uses analytical projection, not mesh vertices")
     else:
         raise ValueError(f"Unsupported projection plane: {plane}")
-    coords = vertices[:, indices].astype(np.float64, copy=False)
     return coords, indices, view_axis
 
 
@@ -45,8 +55,15 @@ def fit_to_viewport(
     width: int = VIEW_WIDTH,
     height: int = VIEW_HEIGHT,
     padding: int = VIEW_PADDING,
-) -> tuple[float, NDArray[np.float64]]:
-    """Scale and offset 2D coordinates to the standard viewer viewport."""
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """
+    Scale and offset 2D coordinates to the standard viewer viewport.
+
+    SVG y increases downward; the second world axis is flipped so larger world
+    values (jar opening / height) appear toward the top of the screen.
+    Returns ``(scale_xy, offset)`` where ``scale_xy`` is ``[s, -s]`` and
+    callers keep using ``coords * scale_xy + offset``.
+    """
     lo = coords.min(axis=0)
     hi = coords.max(axis=0)
     extent = hi - lo
@@ -55,14 +72,15 @@ def fit_to_viewport(
     draw_h = height - 2 * padding
     scale = min(draw_w / extent[0], draw_h / extent[1])
     scaled_extent = extent * scale
+    scale_xy = np.array([scale, -scale], dtype=np.float64)
     offset = np.array(
         [
             padding + (draw_w - scaled_extent[0]) / 2 - lo[0] * scale,
-            padding + (draw_h - scaled_extent[1]) / 2 - lo[1] * scale,
+            padding + (draw_h - scaled_extent[1]) / 2 + hi[1] * scale,
         ],
         dtype=np.float64,
     )
-    return float(scale), offset
+    return scale_xy, offset
 
 
 def canonical_to_trimesh(model_mesh: object) -> trimesh.Trimesh:
@@ -110,7 +128,7 @@ def silhouette_edges(mesh: trimesh.Trimesh, view_axis: int) -> NDArray[np.int64]
 def segments_path(
     segments: NDArray[np.float64],
     *,
-    scale: float,
+    scale: float | NDArray[np.float64],
     offset: NDArray[np.float64],
     css_class: str = "",
 ) -> str:
@@ -118,12 +136,11 @@ def segments_path(
     if segments.size == 0:
         return ""
     parts: list[str] = []
+    scale_xy = np.asarray(scale, dtype=np.float64)
     for (x0, y0), (x1, y1) in segments:
-        sx0 = x0 * scale + offset[0]
-        sy0 = y0 * scale + offset[1]
-        sx1 = x1 * scale + offset[0]
-        sy1 = y1 * scale + offset[1]
-        parts.append(f"M{sx0:.2f},{sy0:.2f}L{sx1:.2f},{sy1:.2f}")
+        p0 = np.array([x0, y0], dtype=np.float64) * scale_xy + offset
+        p1 = np.array([x1, y1], dtype=np.float64) * scale_xy + offset
+        parts.append(f"M{p0[0]:.2f},{p0[1]:.2f}L{p1[0]:.2f},{p1[1]:.2f}")
     class_attr = f' class="{css_class}"' if css_class else ""
     return f'<path{class_attr} fill="none" d="{" ".join(parts)}"/>'
 

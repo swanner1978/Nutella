@@ -20,6 +20,8 @@ from nutella_scraper.engines.compute.internal_jar_surface_builder import (
 from nutella_scraper.domain.models.contact import ContactResult
 from nutella_scraper.domain.models.views import SvgLayer, ViewOverlayPayload, ViewProjectionCache
 from nutella_scraper.engines.visualization.projection_math import (
+    PLANE_LEFT,
+    PLANE_RIGHT,
     PLANE_SIDE,
     PLANE_TOP,
     VIEW_HEIGHT,
@@ -87,11 +89,27 @@ class ContactResultProjector:
             vertices=vertices,
             faces=faces,
         )
+        left_layers, left_stats = self._layers_for_plane(
+            contact=contact,
+            plane=PLANE_LEFT,
+            view_key="left",
+            vertices=vertices,
+            faces=faces,
+        )
+        right_layers, right_stats = self._layers_for_plane(
+            contact=contact,
+            plane=PLANE_RIGHT,
+            view_key="right",
+            vertices=vertices,
+            faces=faces,
+        )
 
         payload = ViewOverlayPayload(
             model_id=contact.model_id,
             profile_layers=profile_layers,
             top_layers=top_layers,
+            left_layers=left_layers,
+            right_layers=right_layers,
             coverage_score_display=contact.coverage_score,
         )
         if profile is not None:
@@ -99,7 +117,7 @@ class ContactResultProjector:
                 {
                     "construction_ms": (time.perf_counter() - started) * 1000.0,
                     "face_count": int(len(faces)),
-                    "face_projections_processed": int(len(faces) * 2),
+                    "face_projections_processed": int(len(faces) * 4),
                     "contact_point_count": int(len(contact.overlay.contact_points)),
                     "collision_point_count": int(
                         len(contact.collision.collision_points)
@@ -109,11 +127,20 @@ class ContactResultProjector:
                     "graphic_element_count": int(
                         profile_stats["graphic_element_count"]
                         + top_stats["graphic_element_count"]
+                        + left_stats["graphic_element_count"]
+                        + right_stats["graphic_element_count"]
                     ),
-                    "svg_bytes": int(profile_stats["svg_bytes"] + top_stats["svg_bytes"]),
+                    "svg_bytes": int(
+                        profile_stats["svg_bytes"]
+                        + top_stats["svg_bytes"]
+                        + left_stats["svg_bytes"]
+                        + right_stats["svg_bytes"]
+                    ),
                     "views": {
                         "side": profile_stats,
                         "top": top_stats,
+                        "left": left_stats,
+                        "right": right_stats,
                     },
                 }
             )

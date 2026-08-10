@@ -1,4 +1,4 @@
-"""Reference 2D views must use CanonicalModel3D.mesh + build_projection_svg (XY/XZ)."""
+"""Reference 2D views must use CanonicalModel3D.mesh + build_projection_svg."""
 
 from __future__ import annotations
 
@@ -10,7 +10,12 @@ import pytest
 
 from nutella_scraper.cad_import import GeometryNormalizer, ImportPipeline, ModelStore
 from nutella_scraper.cad_import.trimesh_loader import TrimeshLoader
-from nutella_scraper.engines.visualization.projection_math import PLANE_SIDE, PLANE_TOP
+from nutella_scraper.engines.visualization.projection_math import (
+    PLANE_LEFT,
+    PLANE_RIGHT,
+    PLANE_SIDE,
+    PLANE_TOP,
+)
 from scripts.demo_import import _save_views
 from scripts.visualization_helpers import VIEW_CONVENTIONS, build_projection_svg
 
@@ -35,6 +40,15 @@ def test_view_conventions_assign_xy_to_profile_and_xz_to_top() -> None:
     assert PLANE_TOP == VIEW_CONVENTIONS["top"]["plane"] == "XZ"
 
 
+def test_view_conventions_include_opposite_left_right() -> None:
+    assert VIEW_CONVENTIONS["left"]["plane"] == PLANE_LEFT == "ZY"
+    assert VIEW_CONVENTIONS["left"]["view_axis"] == "X"
+    assert VIEW_CONVENTIONS["left"]["label_fr"] == "Vue gauche"
+    assert VIEW_CONVENTIONS["right"]["plane"] == PLANE_RIGHT == "-ZY"
+    assert VIEW_CONVENTIONS["right"]["view_axis"] == "-X"
+    assert VIEW_CONVENTIONS["right"]["label_fr"] == "Vue droite"
+
+
 def test_save_views_assigns_projections_to_correct_panels(
     jar_step_path: Path,
     tmp_path: Path,
@@ -54,9 +68,9 @@ def test_save_views_assigns_projections_to_correct_panels(
             tessellation={"applies_to": "STEP"},
         )
 
-    assert mocked.call_count == 2
+    assert mocked.call_count == 4
     planes_by_call = [call.kwargs["plane"] for call in mocked.call_args_list]
-    assert set(planes_by_call) == {"XZ", "XY"}
+    assert set(planes_by_call) == {"XZ", "XY", "ZY", "-ZY"}
     for call in mocked.call_args_list:
         mesh = call.args[0]
         assert len(mesh.vertices) == model.geometry.vertex_count
@@ -64,21 +78,25 @@ def test_save_views_assigns_projections_to_correct_panels(
 
     side_svg = (view_dir / "side_composite.svg").read_text(encoding="utf-8")
     top_svg = (view_dir / "top_composite.svg").read_text(encoding="utf-8")
+    left_svg = (view_dir / "left_composite.svg").read_text(encoding="utf-8")
+    right_svg = (view_dir / "right_composite.svg").read_text(encoding="utf-8")
     side_root = ElementTree.fromstring(side_svg)
     top_root = ElementTree.fromstring(top_svg)
-    # Vue de profil ← side_composite ← XY
+    left_root = ElementTree.fromstring(left_svg)
+    right_root = ElementTree.fromstring(right_svg)
     assert side_root.attrib["data-plane"] == "XY"
     assert side_root.attrib["data-view-axis"] == "Z"
-    # Vue de dessus ← top_composite ← XZ
     assert top_root.attrib["data-plane"] == "XZ"
     assert top_root.attrib["data-view-axis"] == "Y"
-    assert "path" in side_svg
-    assert "path" in top_svg
+    assert left_root.attrib["data-plane"] == "ZY"
+    assert left_root.attrib["data-view-axis"] == "X"
+    assert right_root.attrib["data-plane"] == "-ZY"
+    assert right_root.attrib["data-view-axis"] == "-X"
+    assert "path" in side_svg and "path" in top_svg
+    assert "path" in left_svg and "path" in right_svg
 
     metadata = (view_dir / "metadata.json").read_text(encoding="utf-8")
-    assert '"view_name": "side"' in metadata
-    assert '"plane": "XY"' in metadata
-    assert '"view_name": "top"' in metadata
-    assert '"plane": "XZ"' in metadata
+    for view_name in ("side", "top", "left", "right"):
+        assert f'"view_name": "{view_name}"' in metadata
     assert "PROFILE" not in metadata
     assert "TOP_XZ" not in metadata

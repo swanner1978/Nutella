@@ -27,8 +27,12 @@ LEGACY_ROOT_ASSETS = (
     "side_composite.svg",
     "profile_composite.svg",
     "top_composite.svg",
+    "left_composite.svg",
+    "right_composite.svg",
     "profile.svg",
     "top.svg",
+    "left.svg",
+    "right.svg",
     "metadata.json",
 )
 _ROOT = Path(__file__).resolve().parents[1]

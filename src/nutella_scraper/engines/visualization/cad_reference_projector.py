@@ -1,8 +1,9 @@
-"""Project CadReferenceGeometry B-Rep contours to SVG — no mesh."""
+"""Project CadReferenceGeometry B-Rep contours to SVG — no mesh contour extraction."""
 
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import NDArray
 
 from nutella_scraper.cad_import.brep_contour_extractor import PLANE_PROFILE, PLANE_TOP_XZ
 from nutella_scraper.domain.models.cad_reference_geometry import (
@@ -57,14 +58,24 @@ def _polyline_path(
 def contour_to_svg_fragment(
     contour: CadProjectedContour,
     *,
+    reference_coords: NDArray[np.float64] | None = None,
     css_class: str = "contour",
     stroke: str = POT_STROKE,
     stroke_width: float = POT_STROKE_WIDTH,
 ) -> str:
+    """
+    Render contour polylines to SVG path fragments.
+
+    ``reference_coords`` must be the same 2D projected points used to fit the
+    corresponding mesh view (``fit_to_viewport``), so overlays superimpose exactly.
+    """
     coords = _coords_from_polylines(contour.polylines)
     if len(coords) == 0:
         return ""
-    scale, offset = fit_to_viewport(coords)
+    if reference_coords is not None and len(reference_coords) > 0:
+        scale, offset = fit_to_viewport(reference_coords)
+    else:
+        scale, offset = fit_to_viewport(coords)
     parts = [
         _polyline_path(
             polyline,
@@ -83,6 +94,7 @@ def contour_layers_for_plane(
     contour: CadProjectedContour,
     *,
     view_key: str,
+    reference_coords: NDArray[np.float64] | None = None,
     css_class: str = "interior-profile-contour",
     stroke: str = PROFILE_STROKE,
     stroke_width: float = PROFILE_STROKE_WIDTH,
@@ -90,6 +102,7 @@ def contour_layers_for_plane(
 ) -> tuple[SvgLayer, ...]:
     fragment = contour_to_svg_fragment(
         contour,
+        reference_coords=reference_coords,
         css_class=css_class,
         stroke=stroke,
         stroke_width=stroke_width,
@@ -110,8 +123,10 @@ def cad_reference_layers(
     geometry: CadReferenceGeometry,
     *,
     clearance_mm: float = 0.0,
+    jar_vertices: NDArray[np.float64] | None = None,
 ) -> tuple[tuple[SvgLayer, ...], tuple[SvgLayer, ...]]:
     from nutella_scraper.cad_import.brep_contour_extractor import offset_contour
+    from nutella_scraper.engines.visualization.projection_math import project_vertices
 
     profile = geometry.profile_contour
     top = geometry.top_contour
@@ -122,9 +137,15 @@ def cad_reference_layers(
         profile = offset_contour(profile, clearance_mm)
         top = offset_contour(top, clearance_mm)
 
+    profile_ref = None
+    top_ref = None
+    if jar_vertices is not None and len(jar_vertices) > 0:
+        profile_ref, _, _ = project_vertices(jar_vertices, PLANE_PROFILE)
+        top_ref, _, _ = project_vertices(jar_vertices, PLANE_TOP_XZ)
+
     return (
-        contour_layers_for_plane(profile, view_key="profile"),
-        contour_layers_for_plane(top, view_key="top"),
+        contour_layers_for_plane(profile, view_key="profile", reference_coords=profile_ref),
+        contour_layers_for_plane(top, view_key="top", reference_coords=top_ref),
     )
 
 
@@ -133,8 +154,10 @@ def cad_reference_projection(
     *,
     plane: str,
     clearance_mm: float = 0.0,
+    jar_vertices: NDArray[np.float64] | None = None,
 ) -> str:
     from nutella_scraper.cad_import.brep_contour_extractor import offset_contour
+    from nutella_scraper.engines.visualization.projection_math import project_vertices
 
     if plane == PLANE_PROFILE:
         contour = geometry.profile_contour
@@ -146,4 +169,7 @@ def cad_reference_projection(
         return ""
     if clearance_mm > 0.0:
         contour = offset_contour(contour, clearance_mm)
-    return contour_to_svg_fragment(contour)
+    reference_coords = None
+    if jar_vertices is not None and len(jar_vertices) > 0:
+        reference_coords, _, _ = project_vertices(jar_vertices, plane)
+    return contour_to_svg_fragment(contour, reference_coords=reference_coords)

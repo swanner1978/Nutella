@@ -304,7 +304,12 @@ def build_contact_visualization_response(
     profile_ms["total"] = (time.perf_counter() - total_started) * 1000.0
     report("overlay_generation", "Overlays prêts pour l'interface", 95.0)
 
-    envelope_payload = _envelope_overlay_payload(cad_reference, contact.diagnostics.get("envelope"))
+    jar_vertices = np.asarray(jar.mesh.vertices, dtype=np.float64)
+    envelope_payload = _envelope_overlay_payload(
+        cad_reference,
+        contact.diagnostics.get("envelope"),
+        jar_vertices=jar_vertices,
+    )
     trajectory_payload = _trajectory_overlay_payload(
         internal,
         pose_store,
@@ -325,6 +330,16 @@ def build_contact_visualization_response(
                 **fragments["top"],
                 **envelope_payload.get("top", {}),
                 **trajectory_payload.get("top", {}),
+            },
+            "left": {
+                **fragments.get("left", {}),
+                **envelope_payload.get("left", {}),
+                **trajectory_payload.get("left", {}),
+            },
+            "right": {
+                **fragments.get("right", {}),
+                **envelope_payload.get("right", {}),
+                **trajectory_payload.get("right", {}),
             },
         },
         "pose_constraints": {
@@ -401,6 +416,8 @@ def build_scraper_visualization_response(
         model_id=view_cache.model_id,
         profile_layers=scraper_projection.profile_layers,
         top_layers=scraper_projection.top_layers,
+        left_layers=scraper_projection.left_layers,
+        right_layers=scraper_projection.right_layers,
         coverage_score_display=0.0,
     )
     fragments = OverlayRenderer().layer_fragments(overlay)
@@ -417,6 +434,8 @@ def build_scraper_visualization_response(
         "overlays": {
             "side": fragments["profile"],
             "top": fragments["top"],
+            "left": fragments["left"],
+            "right": fragments["right"],
         },
     }
 
@@ -428,10 +447,15 @@ def build_interior_contour_response(
     clearance_mm: float | None = None,
 ) -> dict[str, Any]:
     """Compute the CAD interior contour without contact simulation."""
+    del clearance_mm  # reserved; contour uses zero clearance (no artificial offset)
     view_cache = view_cache_from_viewer_dir(view_dir)
     store = ModelStore(models_root)
     cad_reference = store.get_cad_reference(view_cache.model_id)
-    projection = EnvelopeProjector().project_geometry(cad_reference)
+    jar_vertices = np.asarray(store.get(view_cache.model_id).mesh.vertices, dtype=np.float64)
+    projection = EnvelopeProjector().project_geometry(
+        cad_reference,
+        jar_vertices=jar_vertices,
+    )
     overlay = ViewOverlayPayload(
         model_id=view_cache.model_id,
         profile_layers=projection.profile_layers,
@@ -444,6 +468,8 @@ def build_interior_contour_response(
         "overlays": {
             "side": envelope_payload.get("side", {}),
             "top": envelope_payload.get("top", {}),
+            "left": envelope_payload.get("left", {}),
+            "right": envelope_payload.get("right", {}),
         },
         "cad_reference": {
             "source": cad_reference.metadata.get("source", "opencascade_brep"),
@@ -457,6 +483,12 @@ def build_interior_contour_response(
             "top_edge_count": (
                 cad_reference.top_contour.edge_count if cad_reference.top_contour else 0
             ),
+            "profile_plane": (
+                cad_reference.profile_contour.plane if cad_reference.profile_contour else None
+            ),
+            "top_plane": (
+                cad_reference.top_contour.plane if cad_reference.top_contour else None
+            ),
         },
     }
 
@@ -467,7 +499,7 @@ def _trajectory_overlay_payload(
     pose_count: int,
 ) -> dict[str, dict[str, str]]:
     if pose_store is None or pose_count < 2:
-        return {"side": {}, "top": {}}
+        return {"side": {}, "top": {}, "left": {}, "right": {}}
     positions: list[tuple[float, float, float]] = []
     for index in range(pose_count):
         snapshot = pose_store.load(index)
@@ -484,6 +516,8 @@ def _trajectory_overlay_payload(
         model_id=internal.jar_id,
         profile_layers=projection.profile_layers,
         top_layers=projection.top_layers,
+        left_layers=projection.left_layers,
+        right_layers=projection.right_layers,
         coverage_score_display=0.0,
     )
     return _map_overlay_fragments(OverlayRenderer().layer_fragments(overlay))
@@ -492,9 +526,11 @@ def _trajectory_overlay_payload(
 def _envelope_overlay_payload(
     cad_reference: CadReferenceGeometry,
     envelope_data: dict[str, Any] | None,
+    *,
+    jar_vertices: np.ndarray | None = None,
 ) -> dict[str, dict[str, str]]:
     if not envelope_data:
-        return {"side": {}, "top": {}}
+        return {"side": {}, "top": {}, "left": {}, "right": {}}
     slices = tuple(
         EnvelopeSlice(
             y_mm=float(entry["y_mm"]),
@@ -510,7 +546,11 @@ def _envelope_overlay_payload(
         clearance_mm=float(envelope_data.get("clearance_mm", 0.0)),
         slices=slices,
     )
-    projection = EnvelopeProjector().project(envelope, cad_reference)
+    projection = EnvelopeProjector().project(
+        envelope,
+        cad_reference,
+        jar_vertices=jar_vertices,
+    )
     overlay = ViewOverlayPayload(
         model_id=cad_reference.model_id,
         profile_layers=projection.profile_layers,
@@ -521,8 +561,10 @@ def _envelope_overlay_payload(
 
 
 def _map_overlay_fragments(fragments: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
-    """Map renderer view keys (profile/top) to viewer keys (side/top)."""
+    """Map renderer view keys (profile/top/left/right) to viewer keys."""
     return {
         "side": fragments.get("profile", {}),
         "top": fragments.get("top", {}),
+        "left": fragments.get("left", {}),
+        "right": fragments.get("right", {}),
     }

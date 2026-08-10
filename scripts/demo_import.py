@@ -202,49 +202,34 @@ def _save_views(
     )
 
     _LOG.info("[visualization] external_overlay=none")
-    side_composite = build_projection_svg(
-        mesh,
-        plane=VIEW_CONVENTIONS["side"]["plane"],
-        center=model.geometry.center_mm,
-        principal_axes=model.geometry.principal_axes,
-        model_id=model.id,
-        canonical_mesh_sha256=canonical_mesh_hash,
-    )
-    top_composite = build_projection_svg(
-        mesh,
-        plane=VIEW_CONVENTIONS["top"]["plane"],
-        center=model.geometry.center_mm,
-        principal_axes=model.geometry.principal_axes,
-        model_id=model.id,
-        canonical_mesh_sha256=canonical_mesh_hash,
-    )
-
-    side_path = run_dir / "side_composite.svg"
-    top_path = run_dir / "top_composite.svg"
-    side_path.write_text(side_composite, encoding="utf-8")
-    top_path.write_text(top_composite, encoding="utf-8")
-    side_hash = _file_sha256(side_path)
-    top_hash = _file_sha256(top_path)
+    displayed_views: dict[str, dict[str, str]] = {}
+    for view_name in ("side", "top", "left", "right"):
+        svg = build_projection_svg(
+            mesh,
+            plane=VIEW_CONVENTIONS[view_name]["plane"],
+            center=model.geometry.center_mm,
+            principal_axes=model.geometry.principal_axes,
+            model_id=model.id,
+            canonical_mesh_sha256=canonical_mesh_hash,
+        )
+        filename = f"{view_name}_composite.svg"
+        path = run_dir / filename
+        path.write_text(svg, encoding="utf-8")
+        file_hash = _file_sha256(path)
+        displayed_views[view_name] = displayed_view_entry(
+            view_name=view_name,
+            filename=filename,
+            sha256=file_hash,
+            canonical_mesh_sha256=canonical_mesh_hash,
+        )
+        _LOG.info("[view:%s] file=%s | sha256=%s", view_name, path, file_hash)
 
     metadata = _metadata_dict(
         model,
         canonical_mesh_hash=canonical_mesh_hash,
     )
     metadata["tessellation"] = tessellation
-    metadata["displayed_views"] = {
-        "side": displayed_view_entry(
-            view_name="side",
-            filename=side_path.name,
-            sha256=side_hash,
-            canonical_mesh_sha256=canonical_mesh_hash,
-        ),
-        "top": displayed_view_entry(
-            view_name="top",
-            filename=top_path.name,
-            sha256=top_hash,
-            canonical_mesh_sha256=canonical_mesh_hash,
-        ),
-    }
+    metadata["displayed_views"] = displayed_views
     metadata["viewer_directory"] = str(run_dir)
 
     meta_path = run_dir / "metadata.json"
@@ -259,8 +244,6 @@ def _save_views(
     else:
         html_path.write_text("<!doctype html><html><body>#000</body></html>", encoding="utf-8")
 
-    _LOG.info("[view:side] file=%s | sha256=%s", side_path, side_hash)
-    _LOG.info("[view:top] file=%s | sha256=%s", top_path, top_hash)
     _LOG.info("[viewer] file=%s | sha256=%s", html_path, _file_sha256(html_path))
     _LOG.info("[manifest] file=%s | sha256=%s", meta_path, _file_sha256(meta_path))
     return run_dir

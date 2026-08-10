@@ -67,6 +67,8 @@ class ViewOverlayPayload:
     profile_layers: tuple[SvgLayer, ...]
     top_layers: tuple[SvgLayer, ...]
     coverage_score_display: float
+    left_layers: tuple[SvgLayer, ...] = ()
+    right_layers: tuple[SvgLayer, ...] = ()
     provenance: Provenance = "visualization_projection"
 
 

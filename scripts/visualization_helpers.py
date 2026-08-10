@@ -15,8 +15,10 @@ VIEW_HEIGHT = 650
 VIEW_PADDING = 48
 
 # CAD orthographic conventions (visualization only), Y-up jar frame:
-# - profile view: projection on XY, camera looks along ±Z (height vs width)
-# - top view: projection on XZ, camera looks along ±Y (footprint)
+# - profile (side): XY, look along ±Z
+# - top: XZ, look along ±Y
+# - left: ZY (Z×Y), look along +X
+# - right: -ZY (−Z×Y), look along −X
 VIEW_CONVENTIONS: dict[str, dict[str, str]] = {
     "side": {
         "plane": "XY",
@@ -31,6 +33,20 @@ VIEW_CONVENTIONS: dict[str, dict[str, str]] = {
         "label_fr": "Vue de dessus",
         "label_en": "Top View",
         "dimension_axes": "X × Z",
+    },
+    "left": {
+        "plane": "ZY",
+        "view_axis": "X",
+        "label_fr": "Vue gauche",
+        "label_en": "Left View",
+        "dimension_axes": "Z × Y",
+    },
+    "right": {
+        "plane": "-ZY",
+        "view_axis": "-X",
+        "label_fr": "Vue droite",
+        "label_en": "Right View",
+        "dimension_axes": "−Z × Y",
     },
 }
 
@@ -51,7 +67,14 @@ def fit_to_viewport(
     width: int = VIEW_WIDTH,
     height: int = VIEW_HEIGHT,
     padding: int = VIEW_PADDING,
-) -> tuple[float, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Fit 2D world coords into the SVG viewport.
+
+    Screen Y increases downward (SVG). World height / second axis is mapped so
+    that larger world values appear toward the *top* of the viewport
+    (opening of the jar up, base down for profile/left/right).
+    """
     lo = coords.min(axis=0)
     hi = coords.max(axis=0)
     extent = hi - lo
@@ -60,14 +83,16 @@ def fit_to_viewport(
     draw_h = height - 2 * padding
     scale = min(draw_w / extent[0], draw_h / extent[1])
     scaled_extent = extent * scale
+    # scale_xy[1] is negative: world V up → SVG y down inverted
+    scale_xy = np.array([scale, -scale], dtype=np.float64)
     offset = np.array(
         [
             padding + (draw_w - scaled_extent[0]) / 2 - lo[0] * scale,
-            padding + (draw_h - scaled_extent[1]) / 2 - lo[1] * scale,
+            padding + (draw_h - scaled_extent[1]) / 2 + hi[1] * scale,
         ],
         dtype=np.float64,
     )
-    return scale, offset
+    return scale_xy, offset
 
 
 def projected_extent_mm(extents_mm: tuple[float, float, float], plane: str) -> tuple[float, float]:
@@ -77,6 +102,8 @@ def projected_extent_mm(extents_mm: tuple[float, float, float], plane: str) -> t
         return dx, dz
     if plane == "XY":
         return dx, dy
+    if plane in ("ZY", "-ZY"):
+        return dz, dy
     raise ValueError(f"Unsupported projection plane: {plane}")
 
 
@@ -129,11 +156,7 @@ def build_cad_reference_projection_svg(
         bounding_box="",
         principal_axes="",
     )
-    if plane == "TOP_XZ":
-        view_axis_label = "Y"
-    elif plane == "PROFILE":
-        view_axis_label = "Y"
-    elif plane == VIEW_CONVENTIONS["top"]["plane"]:
+    if plane == VIEW_CONVENTIONS["top"]["plane"]:
         view_axis_label = VIEW_CONVENTIONS["top"]["view_axis"]
     elif plane == VIEW_CONVENTIONS["side"]["plane"]:
         view_axis_label = VIEW_CONVENTIONS["side"]["view_axis"]
@@ -177,7 +200,8 @@ def build_analytical_projection_svg(
     principal_axes_svg = ""
     if debug_mesh is not None:
         vertices_np = np.asarray(debug_mesh.vertices, dtype=np.float64)
-        coords, component_indices, view_axis_index = _project_vertices(vertices_np, plane)
+        coords, component_indices, view_axis_index, _facing = _project_vertices(vertices_np, plane)
+        del view_axis_index
         scale, offset = fit_to_viewport(coords)
         wireframe_edges = np.asarray(debug_mesh.edges_unique, dtype=np.int64)
         wireframe = _segments_path(
@@ -195,6 +219,7 @@ def build_analytical_projection_svg(
             model_extent=float(np.max(debug_mesh.extents)),
             scale=scale,
             offset=offset,
+            flip_u=(plane == "-ZY"),
         )
 
     layers = ProjectionLayers(
@@ -236,10 +261,16 @@ def build_projection_svg(
 ) -> str:
     """Build independently toggleable 2D layers from a canonical 3D mesh."""
     vertices = np.asarray(mesh.vertices, dtype=np.float64)
-    coords, component_indices, view_axis_index = _project_vertices(vertices, plane)
+    coords, component_indices, view_axis_index, facing_positive = _project_vertices(
+        vertices, plane
+    )
     scale, offset = fit_to_viewport(coords)
 
-    contour_edges = _silhouette_edges(mesh, view_axis_index)
+    contour_edges = _silhouette_edges(
+        mesh,
+        view_axis_index,
+        facing_positive=facing_positive,
+    )
     wireframe_edges = np.asarray(mesh.edges_unique, dtype=np.int64)
     layers = ProjectionLayers(
         contour=_segments_path(
@@ -263,19 +294,10 @@ def build_projection_svg(
             model_extent=float(np.max(mesh.extents)),
             scale=scale,
             offset=offset,
+            flip_u=(plane == "-ZY"),
         ),
     )
-    view_axis_label = "Y"
-    if plane in ("XZ", "TOP_XZ"):
-        view_axis_label = "Y"
-    elif plane == "XY":
-        view_axis_label = "Z"
-    elif plane == VIEW_CONVENTIONS["side"]["plane"]:
-        view_axis_label = VIEW_CONVENTIONS["side"]["view_axis"]
-    elif plane == VIEW_CONVENTIONS["top"]["plane"]:
-        view_axis_label = VIEW_CONVENTIONS["top"]["view_axis"]
-    else:
-        raise ValueError(f"Unsupported projection plane: {plane}")
+    view_axis_label = _view_axis_label_for_plane(plane)
 
     return _projection_document(
         layers,
@@ -286,22 +308,65 @@ def build_projection_svg(
     )
 
 
+def _view_axis_label_for_plane(plane: str) -> str:
+    if plane in ("XZ", "TOP_XZ"):
+        return "Y"
+    if plane == "XY":
+        return "Z"
+    if plane == "ZY":
+        return "X"
+    if plane == "-ZY":
+        return "-X"
+    for spec in VIEW_CONVENTIONS.values():
+        if spec["plane"] == plane:
+            return spec["view_axis"]
+    raise ValueError(f"Unsupported projection plane: {plane}")
+
+
 def _project_vertices(
     vertices: np.ndarray,
     plane: str,
-) -> tuple[np.ndarray, tuple[int, int], int]:
+) -> tuple[np.ndarray, tuple[int, int], int, bool]:
+    """
+    Project vertices to 2D.
+
+    Returns coords, component_indices, view_axis_index, facing_positive.
+    """
     if plane in ("XZ", "TOP_XZ"):
         indices = (0, 2)
         view_axis = 1
+        facing_positive = True
+        coords = vertices[:, indices]
     elif plane == "XY":
         indices = (0, 1)
         view_axis = 2
+        facing_positive = True
+        coords = vertices[:, indices]
+    elif plane == "ZY":
+        # Looking along +X: horizontal = Z, vertical = Y
+        indices = (2, 1)
+        view_axis = 0
+        facing_positive = True
+        coords = vertices[:, indices]
+    elif plane == "-ZY":
+        # Looking along −X: mirror Z so left/right are opposite orientations
+        indices = (2, 1)
+        view_axis = 0
+        facing_positive = False
+        coords = vertices[:, indices].astype(np.float64, copy=True)
+        coords[:, 0] *= -1.0
+        return coords, indices, view_axis, facing_positive
     else:
         raise ValueError(f"Unsupported projection plane: {plane}")
-    return vertices[:, indices], indices, view_axis
+    return coords, indices, view_axis, facing_positive
 
 
-def _silhouette_edges(mesh: trimesh.Trimesh, view_axis: int) -> np.ndarray:
+def _silhouette_edges(
+    mesh: trimesh.Trimesh,
+    view_axis: int,
+    *,
+    facing_positive: bool = True,
+) -> np.ndarray:
     """
     Return boundary/frontier edges for an orthographic view.
 
@@ -311,7 +376,11 @@ def _silhouette_edges(mesh: trimesh.Trimesh, view_axis: int) -> np.ndarray:
     edges_sorted = np.asarray(mesh.edges_sorted, dtype=np.int64)
     unique_edges, inverse = np.unique(edges_sorted, axis=0, return_inverse=True)
     face_ids = np.repeat(np.arange(len(mesh.faces), dtype=np.int64), 3)
-    front_facing = np.asarray(mesh.face_normals[:, view_axis] > 1e-9, dtype=np.int8)
+    axis_component = mesh.face_normals[:, view_axis]
+    if facing_positive:
+        front_facing = np.asarray(axis_component > 1e-9, dtype=np.int8)
+    else:
+        front_facing = np.asarray(axis_component < -1e-9, dtype=np.int8)
 
     counts = np.bincount(inverse, minlength=len(unique_edges))
     has_front = np.zeros(len(unique_edges), dtype=np.int8)
@@ -355,9 +424,10 @@ def _vertices_path(coords: np.ndarray, scale: float, offset: np.ndarray) -> str:
     return f'<path class="vertices" d="{commands}"/>'
 
 
-def _bounding_box_path(coords: np.ndarray, scale: float, offset: np.ndarray) -> str:
-    lo = coords.min(axis=0) * scale + offset
-    hi = coords.max(axis=0) * scale + offset
+def _bounding_box_path(coords: np.ndarray, scale: float | np.ndarray, offset: np.ndarray) -> str:
+    projected = np.vstack([coords.min(axis=0), coords.max(axis=0)]) * scale + offset
+    lo = projected.min(axis=0)
+    hi = projected.max(axis=0)
     width, height = hi - lo
     return (
         f'<rect class="bounding-box" x="{lo[0]:.2f}" y="{lo[1]:.2f}" '
@@ -373,13 +443,17 @@ def _principal_axes_svg(
     model_extent: float,
     scale: float,
     offset: np.ndarray,
+    flip_u: bool = False,
 ) -> str:
     colors = ("#ff5252", "#66ff66", "#4d8dff")
     fragments: list[str] = []
     half_length = max(model_extent * 0.3, 1.0)
     for index, (axis, color) in enumerate(zip(axes, colors, strict=False), start=1):
         endpoints = np.vstack([center - axis * half_length, center + axis * half_length])
-        projected = endpoints[:, component_indices] * scale + offset
+        projected = endpoints[:, component_indices].astype(np.float64, copy=True)
+        if flip_u:
+            projected[:, 0] *= -1.0
+        projected = projected * scale + offset
         fragments.append(
             f'<line class="principal-axis" data-axis="{index}" '
             f'x1="{projected[0, 0]:.2f}" y1="{projected[0, 1]:.2f}" '

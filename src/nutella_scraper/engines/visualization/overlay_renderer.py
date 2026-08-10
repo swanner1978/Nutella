@@ -70,6 +70,14 @@ class OverlayRenderer:
                 layer.layer_type: self._wrap_layer(layer)
                 for layer in overlay.top_layers
             },
+            "left": {
+                layer.layer_type: self._wrap_layer(layer)
+                for layer in overlay.left_layers
+            },
+            "right": {
+                layer.layer_type: self._wrap_layer(layer)
+                for layer in overlay.right_layers
+            },
         }
 
     def _compose_view(

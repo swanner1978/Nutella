@@ -20,8 +20,9 @@ class TestCadReferencePipeline:
     def test_views_generated_from_brep(self, cad_reference_geometry) -> None:
         assert cad_reference_geometry.metadata.get("source") == "opencascade_brep"
         assert cad_reference_geometry.profile_contour is not None
-        assert cad_reference_geometry.profile_contour.source == "opencascade_brep_section"
+        assert cad_reference_geometry.profile_contour.source == "opencascade_brep_section_xy"
         assert cad_reference_geometry.top_contour is not None
+        assert cad_reference_geometry.top_contour.source == "opencascade_brep_rim_xz"
 
     def test_brep_pipeline_does_not_use_trimesh_for_contours(self, jar_step_path: Path) -> None:
         """CAD reference builder must not depend on mesh tessellation."""
@@ -40,28 +41,33 @@ class TestCadReferencePipeline:
         assert cad_reference_geometry.inner_face_count > 0
         assert cad_reference_geometry.outer_face_count > cad_reference_geometry.inner_face_count
 
-    def test_profile_and_top_not_swapped(self, cad_reference_geometry) -> None:
+    def test_profile_and_top_use_view_planes(self, cad_reference_geometry) -> None:
         profile = cad_reference_geometry.profile_contour
         top = cad_reference_geometry.top_contour
         assert profile is not None and top is not None
-        assert profile.plane == PLANE_PROFILE
-        assert top.plane == PLANE_TOP_XZ
+        assert profile.plane == PLANE_PROFILE == "XY"
+        assert profile.view_axis == "Z"
+        assert top.plane == PLANE_TOP_XZ == "XZ"
+        assert top.view_axis == "Y"
 
     def test_profile_has_pot_like_extent(self, cad_reference_geometry) -> None:
         profile = cad_reference_geometry.profile_contour
         assert profile is not None
         points = [point for polyline in profile.polylines for point in polyline.points_mm]
-        radii = [abs(r) for r, _y in points]
-        heights = [y for _r, y in points]
-        assert max(radii) > 20.0
+        xs = [x for x, _y in points]
+        heights = [y for _x, y in points]
+        assert max(abs(x) for x in xs) > 20.0
+        assert min(xs) < 0.0 < max(xs)
         assert max(heights) - min(heights) > 50.0
         assert min(heights) < 0.0
         assert max(heights) > 80.0
 
-    def test_top_contour_is_real_cavity(self, cad_reference_geometry) -> None:
+    def test_top_contour_is_rim_opening(self, cad_reference_geometry) -> None:
         top = cad_reference_geometry.top_contour
         assert top is not None
         assert top.edge_count >= 1
+        assert len(top.polylines) >= 1
+        assert top.polylines[0].is_closed
         points = [point for polyline in top.polylines for point in polyline.points_mm]
         z_values = [z for _x, z in points]
         assert max(z_values) - min(z_values) > 10.0

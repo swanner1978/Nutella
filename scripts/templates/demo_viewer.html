@@ -456,22 +456,43 @@
         overflow-wrap: anywhere;
       }
       .viewer-grid {
-        display: grid;
+        display: flex;
         flex: 1;
-        grid-template-columns: 1fr 1fr;
+        flex-direction: column;
         min-height: 0;
         overflow: hidden;
+      }
+      .view-toolbar {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.55rem 1rem;
+        border-bottom: 1px solid var(--border-soft);
+        background: #050505;
+      }
+      .view-toolbar label {
+        color: #888;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .view-toolbar select {
+        min-width: 11rem;
+        padding: 0.35rem 0.55rem;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        background: #111;
+        color: #ddd;
+        font-size: 0.82rem;
       }
       .view-column {
         display: flex;
         min-width: 0;
         min-height: 0;
+        flex: 1;
         flex-direction: column;
-        border-right: 1px solid var(--border-soft);
         overflow: hidden;
-      }
-      .view-column:last-child {
-        border-right: 0;
       }
       .view-label {
         flex-shrink: 0;
@@ -806,17 +827,19 @@
           </header>
 
           <div class="viewer-grid">
+            <div class="view-toolbar">
+              <label for="view-select">Vue</label>
+              <select id="view-select" aria-label="Sélecteur de vue">
+                <option value="top" selected>Vue de dessus</option>
+                <option value="side">Vue de profil</option>
+                <option value="left">Vue gauche</option>
+                <option value="right">Vue droite</option>
+              </select>
+            </div>
             <section class="view-column">
-              <div class="view-label" id="side-label">Vue de profil — plan XY, selon Z</div>
-              <div class="view-stage" id="side-stage"></div>
-              <div class="view-dims" id="side-dims"></div>
-              <div class="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
-            </section>
-
-            <section class="view-column">
-              <div class="view-label" id="top-label">Vue de dessus — plan XZ, selon Y</div>
-              <div class="view-stage" id="top-stage"></div>
-              <div class="view-dims" id="top-dims"></div>
+              <div class="view-label" id="active-view-label">Vue de dessus — plan XZ, selon Y</div>
+              <div class="view-stage" id="main-stage"></div>
+              <div class="view-dims" id="main-dims"></div>
               <div class="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
             </section>
           </div>
@@ -827,14 +850,11 @@
     <input id="scraper-file" type="file" accept=".json,.yaml,.yml" />
 
     <script>
-      const stages = {
-        side: document.getElementById("side-stage"),
-        top: document.getElementById("top-stage"),
-      };
-      const viewLabels = {
-        side: document.getElementById("side-label"),
-        top: document.getElementById("top-label"),
-      };
+      const mainStage = document.getElementById("main-stage");
+      const mainDims = document.getElementById("main-dims");
+      const activeViewLabel = document.getElementById("active-view-label");
+      const viewSelect = document.getElementById("view-select");
+      const VIEW_ORDER = ["top", "side", "left", "right"];
       const VIEW_SPECS = {
         side: {
           plane: "XY",
@@ -850,7 +870,26 @@
           labelEn: "Top View",
           dimensionAxes: "X × Z",
         },
+        left: {
+          plane: "ZY",
+          viewAxis: "X",
+          labelFr: "Vue gauche",
+          labelEn: "Left View",
+          dimensionAxes: "Z × Y",
+        },
+        right: {
+          plane: "-ZY",
+          viewAxis: "-X",
+          labelFr: "Vue droite",
+          labelEn: "Right View",
+          dimensionAxes: "−Z × Y",
+        },
       };
+      let currentViewName = "top";
+      let cachedViewSvgs = {};
+      let cachedViewMeta = {};
+      let cachedModelData = null;
+      let lastContactOverlayPayload = null;
       const API = {
         importStep: "/api/import-step",
         simulateContact: "/api/simulate-contact",
@@ -1136,6 +1175,8 @@
         interiorContourOverlays = {
           side: result.overlays?.side ?? {},
           top: result.overlays?.top ?? {},
+          left: result.overlays?.left ?? {},
+          right: result.overlays?.right ?? {},
         };
         if (result.reconstruction) {
           profileReconstruction = result.reconstruction;
@@ -1181,31 +1222,36 @@
         }
       }
 
-      function injectScraperLayersOnly(overlayPayload) {
-        const sideSvg = stages.side.querySelector("svg");
-        const topSvg = stages.top.querySelector("svg");
-        if (!sideSvg || !topSvg) return;
-        for (const layerName of SCRAPER_LAYER_NAMES) {
-          for (const layer of sideSvg.querySelectorAll(`[data-layer="${layerName}"]`)) layer.remove();
-          for (const layer of topSvg.querySelectorAll(`[data-layer="${layerName}"]`)) layer.remove();
+      function overlaysForCurrentView() {
+        const merged = {};
+        const sources = [
+          interiorContourOverlays?.[currentViewName],
+          trajectoryOverlays?.[currentViewName],
+          lastContactOverlayPayload?.overlays?.[currentViewName],
+        ];
+        for (const source of sources) {
+          if (source) Object.assign(merged, source);
         }
-        injectContactLayers(sideSvg, overlayPayload?.side ?? {});
-        injectContactLayers(topSvg, overlayPayload?.top ?? {});
+        return merged;
+      }
+
+      function injectScraperLayersOnly(overlayPayload) {
+        lastContactOverlayPayload = {
+          overlays: {
+            side: overlayPayload?.side ?? {},
+            top: overlayPayload?.top ?? {},
+            left: overlayPayload?.left ?? {},
+            right: overlayPayload?.right ?? {},
+          },
+        };
+        applyStoredOverlays();
         applyLayerVisibility();
       }
 
       function applyStoredOverlays() {
-        const sideSvg = stages.side.querySelector("svg");
-        const topSvg = stages.top.querySelector("svg");
-        if (!sideSvg || !topSvg) return;
-        if (interiorContourOverlays) {
-          injectContactLayers(sideSvg, interiorContourOverlays.side ?? {});
-          injectContactLayers(topSvg, interiorContourOverlays.top ?? {});
-        }
-        if (trajectoryOverlays) {
-          injectContactLayers(sideSvg, trajectoryOverlays.side ?? {});
-          injectContactLayers(topSvg, trajectoryOverlays.top ?? {});
-        }
+        const svg = mainStage.querySelector("svg");
+        if (!svg) return;
+        injectContactLayers(svg, overlaysForCurrentView());
       }
 
       async function reloadCurrentStep() {
@@ -1538,11 +1584,17 @@
         syncPoseNavigator();
         metricsPanel.innerHTML =
           '<p class="metrics-empty">Lancez une simulation pour afficher les métriques ContactResult.</p>';
-        for (const stage of Object.values(stages)) {
+        for (const stage of [mainStage]) {
           showStagePlaceholder(stage, message);
         }
-        document.getElementById("side-dims").replaceChildren();
-        document.getElementById("top-dims").replaceChildren();
+        mainDims.replaceChildren();
+        cachedViewSvgs = {};
+        cachedViewMeta = {};
+        cachedModelData = null;
+        lastContactOverlayPayload = null;
+        currentViewName = "top";
+        if (viewSelect) viewSelect.value = "top";
+        activeViewLabel.textContent = formatViewLabel("top", VIEW_SPECS.top);
         document.getElementById("model-title").textContent =
           "Aucun CanonicalModel3D chargé";
         document.getElementById("model-proof").textContent = "@visualization_only";
@@ -1569,11 +1621,110 @@
 
       function formatViewLabel(viewName, view) {
         const defaults = VIEW_SPECS[viewName];
-        const labelFr = defaults.labelFr;
+        const labelFr = view.label_fr ?? defaults.labelFr;
         const labelEn = view.label_en ?? defaults.labelEn;
         const plane = view.plane ?? defaults.plane;
         const viewAxis = view.view_axis ?? defaults.viewAxis;
         return `${labelFr} (${labelEn}) — plan ${plane}, selon ${viewAxis}`;
+      }
+
+      function dimensionHtmlForView(viewName, data, view) {
+        const [dx, dy, dz] = data.dimensions_mm;
+        const axes = view.dimension_axes ?? VIEW_SPECS[viewName].dimensionAxes;
+        const axis = view.view_axis ?? VIEW_SPECS[viewName].viewAxis;
+        let sizeLabel;
+        if (viewName === "top") {
+          sizeLabel = `${dx.toFixed(1)} × ${dz.toFixed(1)} mm`;
+        } else if (viewName === "side") {
+          sizeLabel = `${Math.max(dx, dz).toFixed(1)} × ${dy.toFixed(1)} mm`;
+        } else {
+          sizeLabel = `${dz.toFixed(1)} × ${dy.toFixed(1)} mm`;
+        }
+        return (
+          `<strong>${sizeLabel}</strong>` +
+          `<span>${axes} — vue selon ${axis}</span>`
+        );
+      }
+
+      function renderActiveView() {
+        const viewName = currentViewName;
+        const svg = cachedViewSvgs[viewName];
+        const view = cachedViewMeta[viewName];
+        if (!svg || !view) {
+          showStagePlaceholder(mainStage, "Vue indisponible — réimportez le STEP");
+          return;
+        }
+        mountSvgInStage(mainStage, svg.cloneNode(true));
+        activeViewLabel.textContent = formatViewLabel(viewName, view);
+        if (cachedModelData) {
+          mainDims.innerHTML = dimensionHtmlForView(viewName, cachedModelData, view);
+        }
+        applyStoredOverlays();
+        applyLayerVisibility();
+        resetViewTransforms();
+      }
+
+      function switchView(viewName) {
+        if (!VIEW_SPECS[viewName]) return;
+        currentViewName = viewName;
+        if (viewSelect && viewSelect.value !== viewName) {
+          viewSelect.value = viewName;
+        }
+        renderActiveView();
+      }
+
+      function displayMetadata(data) {
+        cachedModelData = data;
+        document.getElementById("model-title").textContent =
+          data.source_path.split(/[\\/]/).pop();
+        document.getElementById("model-proof").textContent =
+          `model=${data.model_id} · mesh=${data.canonical_mesh_sha256}`;
+        profileReconstruction = data.profile_reconstruction ?? null;
+        const view = cachedViewMeta[currentViewName] ?? resolveDisplayedView(data, currentViewName);
+        activeViewLabel.textContent = formatViewLabel(currentViewName, view);
+        mainDims.innerHTML = dimensionHtmlForView(currentViewName, data, view);
+        renderDiagnosticSummary(lastContactMetrics);
+      }
+
+      async function loadModel(metadataUrl, baseUrl, sequence, signal) {
+        const metadataResponse = await fetch(
+          `${metadataUrl}?request=${encodeURIComponent(sequence)}`,
+          { cache: "no-store", signal },
+        );
+        if (!metadataResponse.ok) throw new Error("Manifest de visualisation introuvable");
+        const data = await metadataResponse.json();
+
+        const nextMeta = {};
+        const nextSvgs = {};
+        await Promise.all(
+          VIEW_ORDER.map(async (viewName) => {
+            const view = resolveDisplayedView(data, viewName);
+            nextMeta[viewName] = view;
+            nextSvgs[viewName] = await fetchSvg(viewName, view, baseUrl, signal);
+          }),
+        );
+        if (sequence !== loadSequence) return;
+
+        cachedViewMeta = nextMeta;
+        cachedViewSvgs = nextSvgs;
+        lastContactOverlayPayload = null;
+        interiorContourOverlays = null;
+        trajectoryOverlays = null;
+        currentViewName = "top";
+        viewSelect.value = "top";
+        displayMetadata(data);
+        renderActiveView();
+        activeModelLoaded = true;
+        currentModelId = data.model_id;
+        currentMetadataUrl = metadataUrl;
+        currentBaseUrl = baseUrl;
+        history.replaceState(
+          null,
+          "",
+          `?model_id=${encodeURIComponent(data.model_id)}&mesh_sha256=${data.canonical_mesh_sha256}`,
+        );
+        setStatus("Modèle chargé", "ready");
+        syncToolbarState(false);
       }
 
       async function fetchSvg(viewName, view, baseUrl, signal) {
@@ -1722,15 +1873,10 @@
       }
 
       function applyContactOverlays(payload) {
-        const sideSvg = stages.side.querySelector("svg");
-        const topSvg = stages.top.querySelector("svg");
-        if (!sideSvg || !topSvg) {
+        lastContactOverlayPayload = payload;
+        if (!mainStage.querySelector("svg")) {
           throw new Error("SVG de base introuvable — rechargez le modèle");
         }
-        const sideLayers = { ...(payload.overlays?.side ?? {}) };
-        const topLayers = { ...(payload.overlays?.top ?? {}) };
-        injectContactLayers(sideSvg, sideLayers);
-        injectContactLayers(topSvg, topLayers);
         applyStoredOverlays();
         applyLayerVisibility();
         if (payload.metrics) renderMetricsPanel(payload.metrics);
@@ -1891,10 +2037,14 @@
           interiorContourOverlays = {
             side: { "interior-envelope": result.overlays?.side?.["interior-envelope"] },
             top: { "interior-envelope": result.overlays?.top?.["interior-envelope"] },
+            left: { "interior-envelope": result.overlays?.left?.["interior-envelope"] },
+            right: { "interior-envelope": result.overlays?.right?.["interior-envelope"] },
           };
           trajectoryOverlays = {
             side: { "scraper-trajectory": result.overlays?.side?.["scraper-trajectory"] },
             top: { "scraper-trajectory": result.overlays?.top?.["scraper-trajectory"] },
+            left: { "scraper-trajectory": result.overlays?.left?.["scraper-trajectory"] },
+            right: { "scraper-trajectory": result.overlays?.right?.["scraper-trajectory"] },
           };
           completedSimulation = {
             pose_constraints: result.pose_constraints,
@@ -1958,61 +2108,6 @@
         }
       }
 
-      function displayMetadata(data) {
-        const [dx, dy, dz] = data.dimensions_mm;
-        const sideView = resolveDisplayedView(data, "side");
-        const topView = resolveDisplayedView(data, "top");
-
-        viewLabels.side.textContent = formatViewLabel("side", sideView);
-        viewLabels.top.textContent = formatViewLabel("top", topView);
-
-        document.getElementById("side-dims").innerHTML =
-          `<strong>${Math.max(dx, dz).toFixed(1)} × ${dy.toFixed(1)} mm</strong>` +
-          `<span>${sideView.dimension_axes ?? VIEW_SPECS.side.dimensionAxes} — vue selon ${sideView.view_axis ?? VIEW_SPECS.side.viewAxis}</span>`;
-        document.getElementById("top-dims").innerHTML =
-          `<strong>${dx.toFixed(1)} × ${dz.toFixed(1)} mm</strong>` +
-          `<span>${topView.dimension_axes ?? VIEW_SPECS.top.dimensionAxes} — vue selon ${topView.view_axis ?? VIEW_SPECS.top.viewAxis}</span>`;
-        document.getElementById("model-title").textContent =
-          data.source_path.split(/[\\/]/).pop();
-        document.getElementById("model-proof").textContent =
-          `model=${data.model_id} · mesh=${data.canonical_mesh_sha256}`;
-        profileReconstruction = data.profile_reconstruction ?? null;
-        renderDiagnosticSummary(lastContactMetrics);
-      }
-
-      async function loadModel(metadataUrl, baseUrl, sequence, signal) {
-        const metadataResponse = await fetch(
-          `${metadataUrl}?request=${encodeURIComponent(sequence)}`,
-          { cache: "no-store", signal },
-        );
-        if (!metadataResponse.ok) throw new Error("Manifest de visualisation introuvable");
-        const data = await metadataResponse.json();
-        const sideView = resolveDisplayedView(data, "side");
-        const topView = resolveDisplayedView(data, "top");
-
-        const [sideSvg, topSvg] = await Promise.all([
-          fetchSvg("side", sideView, baseUrl, signal),
-          fetchSvg("top", topView, baseUrl, signal),
-        ]);
-        if (sequence !== loadSequence) return;
-
-        mountSvgInStage(stages.side, sideSvg);
-        mountSvgInStage(stages.top, topSvg);
-        applyLayerVisibility();
-        displayMetadata(data);
-        activeModelLoaded = true;
-        currentModelId = data.model_id;
-        currentMetadataUrl = metadataUrl;
-        currentBaseUrl = baseUrl;
-        history.replaceState(
-          null,
-          "",
-          `?model_id=${encodeURIComponent(data.model_id)}&mesh_sha256=${data.canonical_mesh_sha256}`,
-        );
-        setStatus("Modèle chargé", "ready");
-        syncToolbarState(false);
-      }
-
       async function uploadStep(file) {
         const extension = file.name.split(".").pop().toLowerCase();
         if (!["step", "stp"].includes(extension)) {
@@ -2066,6 +2161,9 @@
       }
       simulateButton.addEventListener("click", simulateContact);
       cancelButton.addEventListener("click", cancelSimulation);
+      viewSelect.addEventListener("change", () => {
+        switchView(viewSelect.value);
+      });
       posePrevButton.addEventListener("click", () => {
         if (currentPoseIndex <= 0) return;
         displaySimulationPose(currentPoseIndex - 1).catch((error) => {

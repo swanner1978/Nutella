@@ -25,7 +25,7 @@ class ProjectedPolyline2D:
 
 @dataclass(frozen=True)
 class CadProjectedContour:
-    """Exact projected inner-cavity contour from B-Rep HLR — no mesh."""
+    """Exact projected inner-cavity frontier from B-Rep (section / rim) — no mesh."""
 
     plane: str
     view_axis: str

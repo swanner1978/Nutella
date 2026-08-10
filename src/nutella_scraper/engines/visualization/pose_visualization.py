@@ -80,10 +80,24 @@ def build_pose_visualization_response(
             key=lambda layer: layer.z_index,
         )
     )
+    left_layers = tuple(
+        sorted(
+            (*contact_projection.left_layers, *scraper_projection.left_layers),
+            key=lambda layer: layer.z_index,
+        )
+    )
+    right_layers = tuple(
+        sorted(
+            (*contact_projection.right_layers, *scraper_projection.right_layers),
+            key=lambda layer: layer.z_index,
+        )
+    )
     combined = ViewOverlayPayload(
         model_id=model_id,
         profile_layers=profile_layers,
         top_layers=top_layers,
+        left_layers=left_layers,
+        right_layers=right_layers,
         coverage_score_display=0.0,
     )
     fragments = OverlayRenderer().layer_fragments(combined)
@@ -102,5 +116,7 @@ def build_pose_visualization_response(
         "overlays": {
             "side": fragments["profile"],
             "top": fragments["top"],
+            "left": fragments["left"],
+            "right": fragments["right"],
         },
     }

@@ -11,6 +11,8 @@ from nutella_scraper.domain.models.internal_jar_surface import InternalJarSurfac
 from nutella_scraper.domain.models.views import SvgLayer
 from nutella_scraper.engines.compute.internal_jar_surface_builder import internal_mesh_to_trimesh
 from nutella_scraper.engines.visualization.projection_math import (
+    PLANE_LEFT,
+    PLANE_RIGHT,
     PLANE_SIDE,
     PLANE_TOP,
     fit_to_viewport,
@@ -26,6 +28,8 @@ TRAJECTORY_STROKE_WIDTH = 1.2
 class TrajectoryProjection:
     profile_layers: tuple[SvgLayer, ...]
     top_layers: tuple[SvgLayer, ...]
+    left_layers: tuple[SvgLayer, ...] = ()
+    right_layers: tuple[SvgLayer, ...] = ()
 
 
 class TrajectoryProjector:
@@ -54,6 +58,18 @@ class TrajectoryProjector:
                 plane=PLANE_TOP,
                 view_key="top",
             ),
+            left_layers=self._layers_for_plane(
+                points=points,
+                jar_vertices=jar_vertices,
+                plane=PLANE_LEFT,
+                view_key="left",
+            ),
+            right_layers=self._layers_for_plane(
+                points=points,
+                jar_vertices=jar_vertices,
+                plane=PLANE_RIGHT,
+                view_key="right",
+            ),
         )
 
     @staticmethod
@@ -67,10 +83,10 @@ class TrajectoryProjector:
         jar_coords, _, _ = project_vertices(jar_vertices, plane)
         scale, offset = fit_to_viewport(jar_coords)
         coords, _, _ = project_vertices(points, plane)
+        projected = coords * scale + offset
         commands = [
-            f"{'M' if index == 0 else 'L'}{coords[index, 0] * scale + offset[0]:.2f},"
-            f"{coords[index, 1] * scale + offset[1]:.2f}"
-            for index in range(len(coords))
+            f"{'M' if index == 0 else 'L'}{projected[index, 0]:.2f},{projected[index, 1]:.2f}"
+            for index in range(len(projected))
         ]
         path = (
             f'<path class="scraper-trajectory" fill="none" '

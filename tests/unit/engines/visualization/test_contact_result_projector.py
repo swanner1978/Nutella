@@ -97,12 +97,17 @@ class TestContactResultProjector:
 
         face_count = len(contact.overlay.face_coverage)
         assert profile["face_count"] == face_count
-        assert profile["face_projections_processed"] == face_count * 2
+        assert profile["face_projections_processed"] == face_count * 4
         assert profile["contact_point_count"] == len(contact.overlay.contact_points)
         assert profile["construction_ms"] >= 0.0
-        assert profile["graphic_element_count"] < face_count * 4
+        assert profile["graphic_element_count"] < face_count * 8
         assert profile["svg_bytes"] > 0
-        for layers in (payload.profile_layers, payload.top_layers):
+        for layers in (
+            payload.profile_layers,
+            payload.top_layers,
+            payload.left_layers,
+            payload.right_layers,
+        ):
             covered = next(
                 layer for layer in layers if layer.layer_type == LAYER_CONTACT_COVERED
             )

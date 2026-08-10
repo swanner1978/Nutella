@@ -211,6 +211,6 @@ def validate_simulate_contact_response(payload: dict[str, Any]) -> None:
     overlays = payload["overlays"]
     if not isinstance(overlays, dict):
         raise ValueError("overlays doit être un objet JSON")
-    for view_name in ("side", "top"):
+    for view_name in ("side", "top", "left", "right"):
         if view_name not in overlays:
             raise ValueError(f"overlays.{view_name} manquant dans la réponse simulation")
