@@ -30,5 +30,5 @@ def test_step_brep_pipeline_produces_cad_reference(jar_step_path: Path) -> None:
     assert geometry.metadata.get("source") == "opencascade_brep"
     assert geometry.profile_contour is not None
     assert geometry.top_contour is not None
-    assert geometry.profile_contour.source == "opencascade_brep_section"
+    assert geometry.profile_contour.source == "opencascade_brep_section_xy"
     assert geometry.inner_face_count > 0

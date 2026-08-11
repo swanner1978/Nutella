@@ -36,6 +36,10 @@ from nutella_scraper.engines.visualization.envelope_projector import EnvelopePro
 from nutella_scraper.engines.visualization.overlay_renderer import OverlayRenderer
 from nutella_scraper.engines.visualization.pose_snapshot_store import PoseSnapshotStore
 from nutella_scraper.engines.visualization.scraper_result_projector import ScraperResultProjector
+from nutella_scraper.engines.visualization.target_face_color_projector import (
+    LAYER_TARGET_FACE_COLORS,
+    TargetFaceColorProjector,
+)
 from nutella_scraper.engines.visualization.trajectory_projector import TrajectoryProjector
 from nutella_scraper.engines.compute.envelope_builder import EnvelopeBuilder
 from nutella_scraper.io.scraper_config_loader import default_racloir_v1
@@ -489,6 +493,70 @@ def build_interior_contour_response(
             "top_plane": (
                 cad_reference.top_contour.plane if cad_reference.top_contour else None
             ),
+        },
+    }
+
+
+def build_debug_step_face_colors_response(
+    *,
+    view_dir: Path,
+    models_root: Path,
+) -> dict[str, Any]:
+    """
+    Debug-only overlay of STEP faces matching RGB(85,255,255).
+
+    Uses the XCAF colour diagnostic selection only — no geometric interior guess,
+    no envelope rebuild, no contact/simulation changes.
+    """
+    from nutella_scraper.cad_import.step_face_color_diagnostics import (
+        extract_target_face_mesh,
+    )
+
+    view_cache = view_cache_from_viewer_dir(view_dir)
+    store = ModelStore(models_root)
+    model_id = view_cache.model_id
+    step_path = models_root / model_id / ModelStore.REFERENCE_STEP
+    if not step_path.exists():
+        raise FileNotFoundError(
+            f"reference.step introuvable pour le modèle {model_id} "
+            f"(attendu sous {step_path})"
+        )
+
+    target_mesh = extract_target_face_mesh(step_path)
+    diagnostic = target_mesh.diagnostic
+    jar_vertices = np.asarray(store.get(model_id).mesh.vertices, dtype=np.float64)
+    projection = TargetFaceColorProjector().project(
+        face_vertices=target_mesh.vertices,
+        face_triangles=target_mesh.faces,
+        jar_vertices=jar_vertices,
+        target_face_count=diagnostic.matching_face_count,
+        target_area_mm2=diagnostic.total_target_area_mm2,
+        fill_rgb_255=diagnostic.target_rgb_255,
+    )
+    overlay = ViewOverlayPayload(
+        model_id=model_id,
+        profile_layers=projection.profile_layers,
+        top_layers=projection.top_layers,
+        left_layers=projection.left_layers,
+        right_layers=projection.right_layers,
+        coverage_score_display=0.0,
+    )
+    fragments = _map_overlay_fragments(OverlayRenderer().layer_fragments(overlay))
+    return {
+        "model_id": model_id,
+        "color_information_available": diagnostic.color_information_available,
+        "total_brep_faces": diagnostic.total_faces,
+        "faces_with_readable_color": diagnostic.faces_with_readable_color,
+        "target_faces": diagnostic.matching_face_count,
+        "target_area_mm2": diagnostic.total_target_area_mm2,
+        "target_rgb_255": list(diagnostic.target_rgb_255),
+        "matching_face_ids": [sample.face_id for sample in diagnostic.matching_faces],
+        "layer": LAYER_TARGET_FACE_COLORS,
+        "overlays": {
+            "side": fragments.get("side", {}),
+            "top": fragments.get("top", {}),
+            "left": fragments.get("left", {}),
+            "right": fragments.get("right", {}),
         },
     }
 

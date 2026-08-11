@@ -12,6 +12,7 @@ API_IMPORT_STEP = "/api/import-step"
 API_SIMULATE_CONTACT = "/api/simulate-contact"
 API_BUILD_SCRAPER = "/api/build-scraper"
 API_INTERIOR_CONTOUR = "/api/interior-contour"
+API_DEBUG_STEP_FACE_COLORS = "/api/debug-step-face-colors"
 API_SIMULATIONS = "/api/simulations"
 API_RUNTIME = "/api/runtime"
 
@@ -20,6 +21,7 @@ VIEWER_POST_ENDPOINTS: tuple[str, ...] = (
     API_SIMULATE_CONTACT,
     API_BUILD_SCRAPER,
     API_INTERIOR_CONTOUR,
+    API_DEBUG_STEP_FACE_COLORS,
 )
 
 

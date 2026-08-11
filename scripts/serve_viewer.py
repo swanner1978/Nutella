@@ -41,6 +41,7 @@ if str(_ROOT) not in sys.path:
 
 from scripts.viewer_api import (  # noqa: E402
     API_BUILD_SCRAPER,
+    API_DEBUG_STEP_FACE_COLORS,
     API_IMPORT_STEP,
     API_INTERIOR_CONTOUR,
     API_RUNTIME,
@@ -69,6 +70,7 @@ from nutella_scraper.engines.visualization.pose_visualization import (  # noqa: 
     build_pose_visualization_response,
 )
 from nutella_scraper.engines.visualization.viewer_bridge import (  # noqa: E402
+    build_debug_step_face_colors_response,
     build_interior_contour_response,
     build_scraper_visualization_response,
 )
@@ -211,6 +213,9 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
                 return
             if path == API_INTERIOR_CONTOUR:
                 self._handle_interior_contour(request_id)
+                return
+            if path == API_DEBUG_STEP_FACE_COLORS:
+                self._handle_debug_step_face_colors(request_id)
                 return
             if path != API_IMPORT_STEP:
                 self._send_json(
@@ -430,6 +435,42 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _LOG.exception(
                 "[interior-contour:%s] [%s] échec: %s: %s",
+                request_id,
+                stage,
+                exc.__class__.__name__,
+                exc,
+            )
+            status = 404 if isinstance(exc, FileNotFoundError) else 500
+            if isinstance(exc, ValueError):
+                status = 422
+            self._send_error_json(status, exc, request_id=request_id, stage=stage)
+
+    def _handle_debug_step_face_colors(self, request_id: str) -> None:
+        stage = "debug_step_face_colors"
+        try:
+            content_length = self._parse_content_length()
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b""
+            request = read_viewer_model_request(raw_body)
+            view_dir = resolve_view_dir(
+                output_root=self.server.output_root,
+                active_view_dir=self.server.active_view_dir,
+                model_id=request.model_id,
+            )
+            _log_step(
+                request_id,
+                stage,
+                "POST /api/debug-step-face-colors",
+                view_dir=str(view_dir),
+                model_id=request.model_id or view_dir.name,
+            )
+            payload = build_debug_step_face_colors_response(
+                view_dir=view_dir,
+                models_root=self.server.models_root,
+            )
+            self._send_json(200, payload)
+        except Exception as exc:
+            _LOG.exception(
+                "[debug-step-face-colors:%s] [%s] échec: %s: %s",
                 request_id,
                 stage,
                 exc.__class__.__name__,
