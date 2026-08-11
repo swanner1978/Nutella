@@ -96,10 +96,17 @@ def test_viewer_template_exposes_progress_cancel_and_diagnostics() -> None:
         / "demo_viewer.html"
     ).read_text(encoding="utf-8")
 
-    assert 'id="cancel-simulation"' in template
+    assert 'id="cancel-simulation"' not in template
+    assert 'id="toolbar-toggle-overlays"' not in template
+    assert 'id="toolbar-toggle-envelope"' not in template
+    assert 'id="toolbar-toggle-trajectory"' not in template
+    assert 'id="toolbar-reset"' not in template
+    assert 'id="simulate-contact"' in template
+    assert 'id="toggle-envelope"' in template
     assert 'id="simulation-progress"' in template
     assert 'id="simulation-diagnostics"' in template
     assert 'method: "DELETE"' in template
+    assert "async function cancelSimulation()" in template
     assert template.count("applyContactOverlays(pose);") == 1
     assert "result_url" in template
     assert "frontend_transfer" in template

@@ -45,11 +45,15 @@ foreach ($endpoint in $expected) {
     }
 }
 
-foreach ($marker in @("simulate-contact", "cancel-simulation", "simulation-progress")) {
+foreach ($marker in @("simulate-contact", "simulation-progress", "toggle-envelope")) {
     if ($index.Content -notmatch $marker) {
         Write-Host "WARNING: index.html missing ${marker} UI" -ForegroundColor Red
         exit 1
     }
+}
+if ($index.Content -notmatch "cancelSimulation" -or $index.Content -notmatch 'method:\s*"DELETE"') {
+    Write-Host "WARNING: index.html missing simulation cancel helper" -ForegroundColor Red
+    exit 1
 }
 
 if ($runtime.simulation_api -ne "/api/simulate-contact" -or

@@ -450,49 +450,70 @@ def build_interior_contour_response(
     models_root: Path,
     clearance_mm: float | None = None,
 ) -> dict[str, Any]:
-    """Compute the CAD interior contour without contact simulation."""
-    del clearance_mm  # reserved; contour uses zero clearance (no artificial offset)
+    """
+    Overlay for the Contour intérieur layer: STEP faces RGB(85,255,255).
+
+    Selection comes solely from the XCAF colour diagnostic already used by the
+    debug endpoint — no geometric envelope rebuild.
+    """
+    del clearance_mm  # reserved; colour selection ignores clearance
+    from nutella_scraper.cad_import.step_face_color_diagnostics import (
+        extract_target_face_mesh,
+    )
+    from nutella_scraper.engines.visualization.cad_reference_projector import (
+        LAYER_INTERIOR_PROFILE,
+    )
+
     view_cache = view_cache_from_viewer_dir(view_dir)
     store = ModelStore(models_root)
-    cad_reference = store.get_cad_reference(view_cache.model_id)
-    jar_vertices = np.asarray(store.get(view_cache.model_id).mesh.vertices, dtype=np.float64)
-    projection = EnvelopeProjector().project_geometry(
-        cad_reference,
+    model_id = view_cache.model_id
+    step_path = models_root / model_id / ModelStore.REFERENCE_STEP
+    if not step_path.exists():
+        raise FileNotFoundError(
+            f"reference.step introuvable pour le modèle {model_id} "
+            f"(attendu sous {step_path})"
+        )
+
+    target_mesh = extract_target_face_mesh(step_path)
+    diagnostic = target_mesh.diagnostic
+    jar_vertices = np.asarray(store.get(model_id).mesh.vertices, dtype=np.float64)
+    projection = TargetFaceColorProjector().project(
+        face_vertices=target_mesh.vertices,
+        face_triangles=target_mesh.faces,
         jar_vertices=jar_vertices,
+        target_face_count=diagnostic.matching_face_count,
+        target_area_mm2=diagnostic.total_target_area_mm2,
+        fill_rgb_255=diagnostic.target_rgb_255,
+        layer_type=LAYER_INTERIOR_PROFILE,
+        include_labels=False,
     )
     overlay = ViewOverlayPayload(
-        model_id=view_cache.model_id,
+        model_id=model_id,
         profile_layers=projection.profile_layers,
         top_layers=projection.top_layers,
+        left_layers=projection.left_layers,
+        right_layers=projection.right_layers,
         coverage_score_display=0.0,
     )
-    envelope_payload = _map_overlay_fragments(OverlayRenderer().layer_fragments(overlay))
+    fragments = _map_overlay_fragments(OverlayRenderer().layer_fragments(overlay))
+    matching_face_ids = [sample.face_id for sample in diagnostic.matching_faces]
     return {
-        "model_id": view_cache.model_id,
+        "model_id": model_id,
+        "color_information_available": diagnostic.color_information_available,
+        "total_brep_faces": diagnostic.total_faces,
+        "faces_with_readable_color": diagnostic.faces_with_readable_color,
+        "interior_colored_faces": diagnostic.matching_face_count,
+        "target_faces": diagnostic.matching_face_count,
+        "target_area_mm2": diagnostic.total_target_area_mm2,
+        "target_rgb_255": list(diagnostic.target_rgb_255),
+        "matching_face_ids": matching_face_ids,
+        "layer": LAYER_INTERIOR_PROFILE,
+        "source": "step_face_color_rgb_85_255_255",
         "overlays": {
-            "side": envelope_payload.get("side", {}),
-            "top": envelope_payload.get("top", {}),
-            "left": envelope_payload.get("left", {}),
-            "right": envelope_payload.get("right", {}),
-        },
-        "cad_reference": {
-            "source": cad_reference.metadata.get("source", "opencascade_brep"),
-            "step_sha256": cad_reference.step_sha256,
-            "inner_face_count": cad_reference.inner_face_count,
-            "profile_edge_count": (
-                cad_reference.profile_contour.edge_count
-                if cad_reference.profile_contour
-                else 0
-            ),
-            "top_edge_count": (
-                cad_reference.top_contour.edge_count if cad_reference.top_contour else 0
-            ),
-            "profile_plane": (
-                cad_reference.profile_contour.plane if cad_reference.profile_contour else None
-            ),
-            "top_plane": (
-                cad_reference.top_contour.plane if cad_reference.top_contour else None
-            ),
+            "side": fragments.get("side", {}),
+            "top": fragments.get("top", {}),
+            "left": fragments.get("left", {}),
+            "right": fragments.get("right", {}),
         },
     }
 
@@ -505,8 +526,8 @@ def build_debug_step_face_colors_response(
     """
     Debug-only overlay of STEP faces matching RGB(85,255,255).
 
-    Uses the XCAF colour diagnostic selection only — no geometric interior guess,
-    no envelope rebuild, no contact/simulation changes.
+    Uses the same XCAF colour selection as Contour intérieur; emits the legacy
+    ``target-face-colors`` layer name for isolated diagnostics.
     """
     from nutella_scraper.cad_import.step_face_color_diagnostics import (
         extract_target_face_mesh,
@@ -532,6 +553,8 @@ def build_debug_step_face_colors_response(
         target_face_count=diagnostic.matching_face_count,
         target_area_mm2=diagnostic.total_target_area_mm2,
         fill_rgb_255=diagnostic.target_rgb_255,
+        layer_type=LAYER_TARGET_FACE_COLORS,
+        include_labels=True,
     )
     overlay = ViewOverlayPayload(
         model_id=model_id,

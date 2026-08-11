@@ -1,4 +1,4 @@
-"""Debug projection of STEP faces selected by colour — visualization only."""
+"""Projection of STEP faces selected by colour — visualization only."""
 
 from __future__ import annotations
 
@@ -11,6 +11,9 @@ from shapely.ops import unary_union
 
 from nutella_scraper.cad_import.step_face_color_diagnostics import TARGET_RGB_255
 from nutella_scraper.domain.models.views import SvgLayer
+from nutella_scraper.engines.visualization.cad_reference_projector import (
+    LAYER_INTERIOR_PROFILE,
+)
 from nutella_scraper.engines.visualization.projection_math import (
     PLANE_LEFT,
     PLANE_RIGHT,
@@ -32,7 +35,11 @@ class TargetFaceColorProjection:
 
 
 class TargetFaceColorProjector:
-    """Project colour-selected B-Rep face tessellation into viewer SVG overlays."""
+    """Project colour-selected B-Rep faces into viewer SVG overlays.
+
+    Viewport scale/offset always comes from the jar mesh (same as the main model),
+    never from an independent fit of the selected faces alone.
+    """
 
     def project(
         self,
@@ -43,12 +50,20 @@ class TargetFaceColorProjector:
         target_face_count: int,
         target_area_mm2: float,
         fill_rgb_255: tuple[int, int, int] = TARGET_RGB_255,
+        layer_type: str = LAYER_INTERIOR_PROFILE,
+        include_labels: bool = False,
     ) -> TargetFaceColorProjection:
         vertices = np.asarray(face_vertices, dtype=np.float64)
         faces = np.asarray(face_triangles, dtype=np.int64)
         jar = np.asarray(jar_vertices, dtype=np.float64)
         if vertices.size == 0 or faces.size == 0:
-            empty = self._empty_label_layers(target_face_count, target_area_mm2, fill_rgb_255)
+            empty = self._empty_layers(
+                target_face_count=target_face_count,
+                target_area_mm2=target_area_mm2,
+                fill_rgb_255=fill_rgb_255,
+                layer_type=layer_type,
+                include_labels=include_labels,
+            )
             return TargetFaceColorProjection(*empty)
 
         return TargetFaceColorProjection(
@@ -61,6 +76,8 @@ class TargetFaceColorProjector:
                 target_face_count=target_face_count,
                 target_area_mm2=target_area_mm2,
                 fill_rgb_255=fill_rgb_255,
+                layer_type=layer_type,
+                include_labels=include_labels,
             ),
             top_layers=self._layers_for_plane(
                 vertices=vertices,
@@ -71,6 +88,8 @@ class TargetFaceColorProjector:
                 target_face_count=target_face_count,
                 target_area_mm2=target_area_mm2,
                 fill_rgb_255=fill_rgb_255,
+                layer_type=layer_type,
+                include_labels=include_labels,
             ),
             left_layers=self._layers_for_plane(
                 vertices=vertices,
@@ -81,6 +100,8 @@ class TargetFaceColorProjector:
                 target_face_count=target_face_count,
                 target_area_mm2=target_area_mm2,
                 fill_rgb_255=fill_rgb_255,
+                layer_type=layer_type,
+                include_labels=include_labels,
             ),
             right_layers=self._layers_for_plane(
                 vertices=vertices,
@@ -91,30 +112,42 @@ class TargetFaceColorProjector:
                 target_face_count=target_face_count,
                 target_area_mm2=target_area_mm2,
                 fill_rgb_255=fill_rgb_255,
+                layer_type=layer_type,
+                include_labels=include_labels,
             ),
         )
 
-    def _empty_label_layers(
+    def _empty_layers(
         self,
+        *,
         target_face_count: int,
         target_area_mm2: float,
         fill_rgb_255: tuple[int, int, int],
+        layer_type: str,
+        include_labels: bool,
     ) -> tuple[
         tuple[SvgLayer, ...],
         tuple[SvgLayer, ...],
         tuple[SvgLayer, ...],
         tuple[SvgLayer, ...],
     ]:
+        fragment = (
+            _label_fragment(target_face_count, target_area_mm2, fill_rgb_255)
+            if include_labels
+            else ""
+        )
         layers = {
             key: (
-                SvgLayer(
-                    id=f"{key}-{LAYER_TARGET_FACE_COLORS}",
-                    z_index=28,
-                    svg_fragment=_label_fragment(
-                        target_face_count, target_area_mm2, fill_rgb_255
+                (
+                    SvgLayer(
+                        id=f"{key}-{layer_type}",
+                        z_index=28,
+                        svg_fragment=fragment,
+                        layer_type=layer_type,
                     ),
-                    layer_type=LAYER_TARGET_FACE_COLORS,
-                ),
+                )
+                if fragment
+                else ()
             )
             for key in ("profile", "top", "left", "right")
         }
@@ -131,6 +164,8 @@ class TargetFaceColorProjector:
         target_face_count: int,
         target_area_mm2: float,
         fill_rgb_255: tuple[int, int, int],
+        layer_type: str,
+        include_labels: bool,
     ) -> tuple[SvgLayer, ...]:
         jar_coords, _, _ = project_vertices(jar_vertices, plane)
         scale, offset = fit_to_viewport(jar_coords)
@@ -138,19 +173,24 @@ class TargetFaceColorProjector:
         projected = face_coords * scale + offset
         fill = f"rgb({fill_rgb_255[0]},{fill_rgb_255[1]},{fill_rgb_255[2]})"
         path = _filled_triangles_path(projected, faces)
+        labels = (
+            _label_fragment(target_face_count, target_area_mm2, fill_rgb_255)
+            if include_labels
+            else ""
+        )
         fragment = (
             f'<path d="{path}" fill="{fill}" fill-opacity="0.55" stroke="{fill}" '
             'stroke-width="0.6" stroke-opacity="0.9" '
             'vector-effect="non-scaling-stroke" fill-rule="evenodd" '
-            f'class="{LAYER_TARGET_FACE_COLORS}"/>'
-            f"{_label_fragment(target_face_count, target_area_mm2, fill_rgb_255)}"
+            f'class="{layer_type}"/>'
+            f"{labels}"
         )
         return (
             SvgLayer(
-                id=f"{view_key}-{LAYER_TARGET_FACE_COLORS}",
+                id=f"{view_key}-{layer_type}",
                 z_index=28,
                 svg_fragment=fragment,
-                layer_type=LAYER_TARGET_FACE_COLORS,
+                layer_type=layer_type,
             ),
         )
 

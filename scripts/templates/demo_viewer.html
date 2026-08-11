@@ -109,15 +109,6 @@
         opacity: 0.38;
         cursor: not-allowed;
       }
-      .toolbar-btn[data-active="true"] {
-        border-color: #666;
-        background: #222;
-        color: #fff;
-      }
-      .toolbar-btn.danger {
-        border-color: #5a3030;
-        color: #ffaaaa;
-      }
       .toolbar-btn.primary {
         border-color: #555;
         background: #ececec;
@@ -629,24 +620,6 @@
           <button class="toolbar-btn primary" id="simulate-contact" type="button" disabled title="Lancer la simulation">
             <span class="btn-label">Simuler</span>
           </button>
-          <button class="toolbar-btn danger" id="cancel-simulation" type="button" hidden title="Arrêter la simulation">
-            <span class="btn-label">Arrêter</span>
-          </button>
-          <button class="toolbar-btn" id="toolbar-reset" type="button" title="Réinitialiser">
-            <span class="btn-label">Réinitialiser</span>
-          </button>
-        </div>
-
-        <div class="toolbar-group" aria-label="Affichage rapide">
-          <button class="toolbar-btn" id="toolbar-toggle-overlays" type="button" data-active="true" title="Afficher/Masquer overlays de contact">
-            <span class="btn-label">Overlays</span>
-          </button>
-          <button class="toolbar-btn" id="toolbar-toggle-envelope" type="button" title="Afficher/Masquer le contour intérieur">
-            <span class="btn-label">Contour intérieur</span>
-          </button>
-          <button class="toolbar-btn" id="toolbar-toggle-trajectory" type="button" title="Afficher/Masquer la trajectoire">
-            <span class="btn-label">Trajectoire</span>
-          </button>
         </div>
 
         <div class="toolbar-status" id="status" data-state="idle">Aucun modèle chargé</div>
@@ -786,11 +759,6 @@
               </header>
               <div class="accordion-body">
                 <div class="diagnostic-summary" id="diagnostic-summary">Aucun diagnostic disponible.</div>
-                <label class="toggle">
-                  <input type="checkbox" id="toggle-target-face-colors" data-layer-toggle="target-face-colors" checked />
-                  Faces STEP RGB(85,255,255)
-                </label>
-                <div class="diagnostic-summary" id="target-face-color-summary">Target faces: — · Target area: —</div>
               </div>
             </section>
 
@@ -900,13 +868,11 @@
         simulateContact: "/api/simulate-contact",
         buildScraper: "/api/build-scraper",
         interiorContour: "/api/interior-contour",
-        debugStepFaceColors: "/api/debug-step-face-colors",
         runtime: "/api/runtime",
       };
       const statusElement = document.getElementById("status");
       const fileInput = document.getElementById("step-file");
       const simulateButton = document.getElementById("simulate-contact");
-      const cancelButton = document.getElementById("cancel-simulation");
       const simulationProgress = document.getElementById("simulation-progress");
       const simulationPhase = document.getElementById("simulation-phase");
       const simulationElapsed = document.getElementById("simulation-elapsed");
@@ -922,10 +888,6 @@
       const envelopeToggle = document.getElementById("toggle-envelope");
       const trajectoryToggle = document.getElementById("toggle-trajectory");
       const toolbarReload = document.getElementById("toolbar-reload-step");
-      const toolbarReset = document.getElementById("toolbar-reset");
-      const toolbarToggleOverlays = document.getElementById("toolbar-toggle-overlays");
-      const toolbarToggleEnvelope = document.getElementById("toolbar-toggle-envelope");
-      const toolbarToggleTrajectory = document.getElementById("toolbar-toggle-trajectory");
       const toolbarBuildScraper = document.getElementById("toolbar-build-scraper");
       const CONTACT_LAYER_NAMES = [
         "contact-covered",
@@ -938,19 +900,8 @@
         "scraper-contour",
         "interior-envelope",
         "scraper-trajectory",
-        "target-face-colors",
       ];
       const SCRAPER_LAYER_NAMES = ["scraper-volume", "scraper-contour"];
-      const OVERLAY_LAYER_NAMES = [
-        "contact-covered",
-        "contact-uncovered",
-        "distance-map",
-        "contact-points",
-        "collision-faces",
-        "collision-points",
-        "scraper-volume",
-        "scraper-contour",
-      ];
       let loadSequence = 0;
       let activeRequest = null;
       let activeModelLoaded = false;
@@ -963,15 +914,12 @@
       let simulationPollController = null;
       let poseRequestSequence = 0;
       let devMode = false;
-      let overlaysMasterVisible = true;
       let lastContactMetrics = null;
       let profileReconstruction = null;
       let interiorContourOverlays = null;
-      let targetFaceColorOverlays = null;
-      let targetFaceColorStats = null;
+      let interiorContourStats = null;
+      let interiorContourFetchPromise = null;
       let trajectoryOverlays = null;
-      const targetFaceColorSummary = document.getElementById("target-face-color-summary");
-      const targetFaceColorToggle = document.getElementById("toggle-target-face-colors");
       let currentPoseIndex = 0;
       let poseManifestEntries = [];
 
@@ -986,11 +934,8 @@
 
       function syncToolbarState(running = false) {
         simulateButton.disabled = running || !activeModelLoaded;
-        cancelButton.hidden = !running;
         toolbarReload.disabled = running || !activeModelLoaded;
         toolbarBuildScraper.disabled = running || !activeModelLoaded;
-        toolbarToggleEnvelope.dataset.active = String(envelopeToggle.checked);
-        toolbarToggleTrajectory.dataset.active = String(trajectoryToggle.checked);
       }
 
       function setSimulationControls(running) {
@@ -1113,24 +1058,6 @@
         stage.append(placeholder);
       }
 
-      function toggleEnvelopeMaster() {
-        envelopeToggle.checked = !envelopeToggle.checked;
-        toolbarToggleEnvelope.dataset.active = String(envelopeToggle.checked);
-        if (envelopeToggle.checked && !interiorContourOverlays && activeModelLoaded) {
-          fetchInteriorContour().catch((error) => {
-            setStatus(error.message.split("\n")[0], "error");
-          });
-          return;
-        }
-        applyLayerVisibility();
-      }
-
-      function toggleTrajectoryMaster() {
-        trajectoryToggle.checked = !trajectoryToggle.checked;
-        toolbarToggleTrajectory.dataset.active = String(trajectoryToggle.checked);
-        applyLayerVisibility();
-      }
-
       function formatPoseLabel(pose, index, total) {
         if (!pose) {
           return {
@@ -1164,85 +1091,55 @@
         renderPoseInfo(entry?.pose ?? null, currentPoseIndex, total);
       }
 
-      function toggleOverlaysMaster() {
-        overlaysMasterVisible = !overlaysMasterVisible;
-        toolbarToggleOverlays.dataset.active = String(overlaysMasterVisible);
-        applyLayerVisibility();
-      }
-
-      async function fetchInteriorContour() {
-        if (!currentModelId) return;
-        setStatus("Calcul du contour intérieur…", "loading");
-        const response = await fetch(API.interiorContour, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model_id: currentModelId }),
-          cache: "no-store",
-        });
-        const result = await readJsonResponse(response);
-        if (!response.ok) {
-          throw new Error(formatServerError(result, `Échec contour intérieur (${response.status})`));
+      async function fetchInteriorContour({ force = false } = {}) {
+        if (!currentModelId) return null;
+        if (interiorContourOverlays && !force) {
+          return interiorContourStats;
         }
-        interiorContourOverlays = {
-          side: result.overlays?.side ?? {},
-          top: result.overlays?.top ?? {},
-          left: result.overlays?.left ?? {},
-          right: result.overlays?.right ?? {},
-        };
-        if (result.reconstruction) {
-          profileReconstruction = result.reconstruction;
-          renderDiagnosticSummary(lastContactMetrics);
+        if (interiorContourFetchPromise && !force) {
+          return interiorContourFetchPromise;
         }
-        applyStoredOverlays();
-        applyLayerVisibility();
-        setStatus("Contour intérieur prêt", "ready");
-      }
-
-      function renderTargetFaceColorSummary(stats) {
-        if (!targetFaceColorSummary) return;
-        if (!stats) {
-          targetFaceColorSummary.textContent = "Target faces: — · Target area: —";
-          return;
+        interiorContourFetchPromise = (async () => {
+          const response = await fetch(API.interiorContour, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_id: currentModelId }),
+            cache: "no-store",
+          });
+          const result = await readJsonResponse(response);
+          if (!response.ok) {
+            throw new Error(
+              formatServerError(result, `Échec contour intérieur (${response.status})`),
+            );
+          }
+          interiorContourOverlays = {
+            side: result.overlays?.side ?? {},
+            top: result.overlays?.top ?? {},
+            left: result.overlays?.left ?? {},
+            right: result.overlays?.right ?? {},
+          };
+          interiorContourStats = {
+            interior_colored_faces: result.interior_colored_faces ?? result.target_faces,
+            target_rgb_255: result.target_rgb_255,
+            target_area_mm2: result.target_area_mm2,
+            matching_face_ids: result.matching_face_ids ?? [],
+            source: result.source,
+          };
+          console.info("[viewer:interior-colored-faces]", {
+            "Interior colored faces": interiorContourStats.interior_colored_faces,
+            "Target color": `RGB(${(interiorContourStats.target_rgb_255 || []).join(",")})`,
+            "Total target area": `${Number(interiorContourStats.target_area_mm2 ?? 0).toFixed(3)} mm²`,
+            matching_face_ids: interiorContourStats.matching_face_ids,
+          });
+          applyStoredOverlays();
+          applyLayerVisibility();
+          return interiorContourStats;
+        })();
+        try {
+          return await interiorContourFetchPromise;
+        } finally {
+          interiorContourFetchPromise = null;
         }
-        const area = Number(stats.target_area_mm2 ?? 0).toFixed(3);
-        targetFaceColorSummary.textContent =
-          `Target faces: ${stats.target_faces ?? 0} · Target area: ${area} mm²`;
-      }
-
-      async function fetchTargetFaceColors() {
-        if (!currentModelId) return;
-        setStatus("Diagnostic faces couleur STEP…", "loading");
-        const response = await fetch(API.debugStepFaceColors, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model_id: currentModelId }),
-          cache: "no-store",
-        });
-        const result = await readJsonResponse(response);
-        if (!response.ok) {
-          throw new Error(
-            formatServerError(result, `Échec diagnostic faces couleur (${response.status})`),
-          );
-        }
-        targetFaceColorOverlays = {
-          side: result.overlays?.side ?? {},
-          top: result.overlays?.top ?? {},
-          left: result.overlays?.left ?? {},
-          right: result.overlays?.right ?? {},
-        };
-        targetFaceColorStats = {
-          target_faces: result.target_faces,
-          target_area_mm2: result.target_area_mm2,
-          matching_face_ids: result.matching_face_ids,
-          color_information_available: result.color_information_available,
-        };
-        renderTargetFaceColorSummary(targetFaceColorStats);
-        applyStoredOverlays();
-        applyLayerVisibility();
-        setStatus(
-          `Faces couleur: ${result.target_faces} · ${Number(result.target_area_mm2).toFixed(3)} mm²`,
-          "ready",
-        );
       }
 
       async function buildScraperOnly() {
@@ -1282,14 +1179,23 @@
 
       function overlaysForCurrentView() {
         const merged = {};
+        // Contour intérieur (STEP colour faces) applied last so simulation never replaces it.
         const sources = [
-          interiorContourOverlays?.[currentViewName],
-          targetFaceColorOverlays?.[currentViewName],
-          trajectoryOverlays?.[currentViewName],
           lastContactOverlayPayload?.overlays?.[currentViewName],
+          trajectoryOverlays?.[currentViewName],
+          interiorContourOverlays?.[currentViewName],
         ];
         for (const source of sources) {
-          if (source) Object.assign(merged, source);
+          if (!source) continue;
+          for (const [layerName, markup] of Object.entries(source)) {
+            if (
+              layerName === "interior-envelope" &&
+              source !== interiorContourOverlays?.[currentViewName]
+            ) {
+              continue;
+            }
+            merged[layerName] = markup;
+          }
         }
         return merged;
       }
@@ -1338,40 +1244,6 @@
             setStatus(error.message, "error");
           }
         }
-      }
-
-      function resetApplication() {
-        activeRequest?.abort();
-        activeRequest = null;
-        if (activeSimulation?.cancel_url) {
-          fetch(activeSimulation.cancel_url, {
-            method: "DELETE",
-            cache: "no-store",
-          }).catch(() => {});
-        }
-        simulationPollController?.abort();
-        activeSimulation = null;
-        simulationPollController = null;
-        lastUploadedFile = null;
-        currentMetadataUrl = null;
-        currentBaseUrl = null;
-        interiorContourOverlays = null;
-        targetFaceColorOverlays = null;
-        targetFaceColorStats = null;
-        renderTargetFaceColorSummary(null);
-        trajectoryOverlays = null;
-        profileReconstruction = null;
-        poseManifestEntries = [];
-        currentPoseIndex = 0;
-        diagnosticSummary.textContent = "Aucun diagnostic disponible.";
-        syncPoseNavigator();
-        diagnosticContent.textContent = devMode
-          ? "Aucun profil disponible."
-          : "Profil développement disponible en mode --dev.";
-        history.replaceState(null, "", location.pathname);
-        clearGraphics();
-        setSimulationControls(false);
-        syncToolbarState(false);
       }
 
       function renderSimulationState(state) {
@@ -1771,9 +1643,8 @@
         cachedViewSvgs = nextSvgs;
         lastContactOverlayPayload = null;
         interiorContourOverlays = null;
-        targetFaceColorOverlays = null;
-        targetFaceColorStats = null;
-        renderTargetFaceColorSummary(null);
+        interiorContourStats = null;
+        interiorContourFetchPromise = null;
         trajectoryOverlays = null;
         currentViewName = "top";
         viewSelect.value = "top";
@@ -1790,11 +1661,11 @@
         );
         setStatus("Modèle chargé", "ready");
         syncToolbarState(false);
-        if (targetFaceColorToggle?.checked) {
-          fetchTargetFaceColors().catch((error) => {
-            setStatus(error.message.split("\n")[0], "error");
-          });
-        }
+        // Detect coloured interior faces once per STEP load; toggle only toggles visibility.
+        fetchInteriorContour().catch((error) => {
+          console.error("[viewer:interior-colored-faces]", error);
+          setStatus(error.message.split("\n")[0], "error");
+        });
       }
 
       async function fetchSvg(viewName, view, baseUrl, signal) {
@@ -1849,15 +1720,6 @@
             }
           }
         }
-        if (!overlaysMasterVisible) {
-          for (const layerName of OVERLAY_LAYER_NAMES) {
-            for (const layer of document.querySelectorAll(`[data-layer="${layerName}"]`)) {
-              layer.style.display = "none";
-            }
-          }
-        }
-        toolbarToggleEnvelope.dataset.active = String(envelopeToggle.checked);
-        toolbarToggleTrajectory.dataset.active = String(trajectoryToggle.checked);
       }
 
       function removeContactLayers(svgRoot) {
@@ -2104,12 +1966,7 @@
             result.scraper_pipeline,
             result.trajectory,
           );
-          interiorContourOverlays = {
-            side: { "interior-envelope": result.overlays?.side?.["interior-envelope"] },
-            top: { "interior-envelope": result.overlays?.top?.["interior-envelope"] },
-            left: { "interior-envelope": result.overlays?.left?.["interior-envelope"] },
-            right: { "interior-envelope": result.overlays?.right?.["interior-envelope"] },
-          };
+          // Keep Contour intérieur cache (STEP colour faces); do not replace with simulation envelope.
           trajectoryOverlays = {
             side: { "scraper-trajectory": result.overlays?.side?.["scraper-trajectory"] },
             top: { "scraper-trajectory": result.overlays?.top?.["scraper-trajectory"] },
@@ -2154,7 +2011,6 @@
 
       async function cancelSimulation() {
         if (!activeSimulation?.cancel_url) return;
-        cancelButton.disabled = true;
         try {
           const response = await fetch(activeSimulation.cancel_url, {
             method: "DELETE",
@@ -2173,7 +2029,6 @@
           setStatus(error.message.split("\n")[0], "error");
           console.error("[viewer:cancel]", error);
         } finally {
-          cancelButton.disabled = false;
           setSimulationControls(false);
         }
       }
@@ -2230,7 +2085,6 @@
         toggle.addEventListener("change", applyLayerVisibility);
       }
       simulateButton.addEventListener("click", simulateContact);
-      cancelButton.addEventListener("click", cancelSimulation);
       viewSelect.addEventListener("change", () => {
         switchView(viewSelect.value);
       });
@@ -2252,26 +2106,7 @@
           console.error("[viewer:pose]", error);
         });
       });
-      envelopeToggle.addEventListener("change", () => {
-        if (envelopeToggle.checked && !interiorContourOverlays && activeModelLoaded) {
-          fetchInteriorContour().catch((error) => {
-            envelopeToggle.checked = false;
-            setStatus(error.message.split("\n")[0], "error");
-          });
-          return;
-        }
-        applyLayerVisibility();
-      });
-      targetFaceColorToggle?.addEventListener("change", () => {
-        if (targetFaceColorToggle.checked && !targetFaceColorOverlays && activeModelLoaded) {
-          fetchTargetFaceColors().catch((error) => {
-            targetFaceColorToggle.checked = false;
-            setStatus(error.message.split("\n")[0], "error");
-          });
-          return;
-        }
-        applyLayerVisibility();
-      });
+      envelopeToggle.addEventListener("change", applyLayerVisibility);
       trajectoryToggle.addEventListener("change", applyLayerVisibility);
       fileInput.addEventListener("change", () => {
         const [file] = fileInput.files;
@@ -2286,10 +2121,6 @@
           setStatus(error.message.split("\n")[0], "error");
         });
       });
-      toolbarReset.addEventListener("click", resetApplication);
-      toolbarToggleOverlays.addEventListener("click", toggleOverlaysMaster);
-      toolbarToggleEnvelope.addEventListener("click", toggleEnvelopeMaster);
-      toolbarToggleTrajectory.addEventListener("click", toggleTrajectoryMaster);
       toolbarBuildScraper.addEventListener("click", () => {
         buildScraperOnly();
       });
