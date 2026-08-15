@@ -81,9 +81,12 @@ def profile_layers_for_plane(
     stroke_width: float = PROFILE_STROKE_WIDTH,
     layer_type: str = LAYER_INTERIOR_PROFILE,
 ) -> tuple[SvgLayer, ...]:
-    if plane == PLANE_PROFILE:
+    if plane in ("XY", "PROFILE", PLANE_PROFILE):
         coords = profile_side_path(profile)
-    elif plane == PLANE_TOP_XZ:
+    elif plane in ("X-Z", "TOP_XZ", PLANE_TOP_XZ):
+        coords = profile_top_path(profile)
+        coords = np.column_stack([coords[:, 0], -coords[:, 1]])
+    elif plane == "XZ":
         coords = profile_top_path(profile)
     else:
         raise ValueError(f"Unsupported projection plane: {plane}")
@@ -120,9 +123,12 @@ def profile_contour_svg_fragment(
     stroke: str = POT_STROKE,
     stroke_width: float = POT_STROKE_WIDTH,
 ) -> str:
-    if plane == PLANE_PROFILE:
+    if plane in ("XY", "PROFILE", PLANE_PROFILE):
         coords = profile_side_path(profile)
-    elif plane == PLANE_TOP_XZ:
+    elif plane in ("X-Z", "TOP_XZ", PLANE_TOP_XZ):
+        coords = profile_top_path(profile)
+        coords = np.column_stack([coords[:, 0], -coords[:, 1]])
+    elif plane == "XZ":
         coords = profile_top_path(profile)
     else:
         raise ValueError(f"Unsupported projection plane: {plane}")

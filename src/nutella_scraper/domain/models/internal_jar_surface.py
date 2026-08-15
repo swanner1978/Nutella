@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from nutella_scraper.domain.models.canonical import MeshData
@@ -63,3 +64,57 @@ class InternalJarSurface:
                 t = (y_mm - left.y_mm) / span
                 return left.inner_radius_mm + t * (right.inner_radius_mm - left.inner_radius_mm)
         return self.slices[-1].inner_radius_mm
+
+    def wall_distance_along_direction(
+        self,
+        y_mm: float,
+        direction_xz: tuple[float, float],
+        *,
+        angular_tolerance_deg: float = 25.0,
+        half_band_mm: float | None = None,
+    ) -> float:
+        """
+        Distance from the Y axis to the interior wall along a horizontal direction.
+
+        Uses the real cavity mesh (not the cylindrical min-radius slices), so an
+        elliptical jar returns the meridian extent in ``direction_xz``.
+        """
+        dx, dz = float(direction_xz[0]), float(direction_xz[1])
+        norm = math.hypot(dx, dz)
+        if norm <= 1e-12:
+            raise ValueError("direction_xz must be non-zero")
+        ux, uz = dx / norm, dz / norm
+
+        vertices = self.mesh.vertices
+        if not vertices:
+            return float(self.inner_radius_at(y_mm))
+
+        height_span = max(float(self.y_max_mm) - float(self.y_min_mm), 1.0)
+        band = float(half_band_mm) if half_band_mm is not None else max(1.5, 0.03 * height_span)
+
+        xs: list[float] = []
+        zs: list[float] = []
+        for x, y, z in vertices:
+            if abs(float(y) - y_mm) <= band:
+                xs.append(float(x))
+                zs.append(float(z))
+        if not xs:
+            nearest_y = min(vertices, key=lambda v: abs(float(v[1]) - y_mm))[1]
+            for x, y, z in vertices:
+                if abs(float(y) - float(nearest_y)) <= band:
+                    xs.append(float(x))
+                    zs.append(float(z))
+        if not xs:
+            return float(self.inner_radius_at(y_mm))
+
+        target_angle = math.atan2(uz, ux)
+        tol = math.radians(max(angular_tolerance_deg, 1.0))
+        projections: list[float] = []
+        for x_i, z_i in zip(xs, zs, strict=True):
+            angle = math.atan2(z_i, x_i)
+            delta = abs((angle - target_angle + math.pi) % (2.0 * math.pi) - math.pi)
+            if delta <= tol:
+                projections.append(x_i * ux + z_i * uz)
+        if not projections:
+            projections = [x_i * ux + z_i * uz for x_i, z_i in zip(xs, zs, strict=True)]
+        return max(float(self.inner_radius_at(y_mm)), max(projections))

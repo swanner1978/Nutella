@@ -356,6 +356,159 @@
         opacity: 0.45;
         cursor: not-allowed;
       }
+      .scraper-field-grid {
+        display: grid;
+        gap: 0.4rem;
+        margin: 0.35rem 0 0.65rem;
+      }
+      .scraper-field {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.35rem;
+        align-items: center;
+        color: #bbb;
+        font-size: 0.68rem;
+      }
+      .scraper-field input[type="number"] {
+        width: 5.5rem;
+        min-height: 1.55rem;
+        padding: 0.15rem 0.35rem;
+        border: 1px solid #333;
+        border-radius: 3px;
+        background: #111;
+        color: #eee;
+        font-size: 0.68rem;
+      }
+      .scraper-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-top: 0.45rem;
+      }
+      .scraper-actions button {
+        min-height: 1.7rem;
+        padding: 0.2rem 0.55rem;
+        border: 1px solid #333;
+        border-radius: 3px;
+        background: #171717;
+        color: #ddd;
+        font-size: 0.66rem;
+        cursor: pointer;
+      }
+      .scraper-actions button:hover:not(:disabled) {
+        background: #222;
+        color: #fff;
+      }
+      .scraper-actions button.primary {
+        border-color: #555;
+        background: #ececec;
+        color: #111;
+      }
+      .scraper-rotation-panel {
+        margin: 0.55rem 0 0.35rem;
+        padding: 0.45rem 0.4rem 0.55rem;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        background: #121212;
+      }
+      .scraper-rotation-angle {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        color: #ddd;
+        font-size: 0.75rem;
+        margin-bottom: 0.35rem;
+      }
+      .scraper-rotation-angle strong {
+        font-variant-numeric: tabular-nums;
+        color: #f0d090;
+      }
+      .scraper-rotation-slider {
+        width: 100%;
+        margin: 0.15rem 0 0.1rem;
+        accent-color: #c48a2a;
+      }
+      .scraper-rotation-range {
+        display: flex;
+        justify-content: space-between;
+        color: #777;
+        font-size: 0.62rem;
+        margin-bottom: 0.4rem;
+      }
+      .scraper-step-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.4rem;
+        margin: 0.2rem 0 0.45rem;
+        color: #bbb;
+        font-size: 0.7rem;
+      }
+      .scraper-step-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .scraper-step-controls button {
+        min-width: 1.7rem;
+        min-height: 1.55rem;
+        padding: 0 0.35rem;
+        border: 1px solid #333;
+        border-radius: 3px;
+        background: #1a1a1a;
+        color: #eee;
+        cursor: pointer;
+      }
+      .scraper-step-controls strong {
+        min-width: 2.4rem;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+        color: #f0d090;
+      }
+      .scraper-validation {
+        margin-top: 0.5rem;
+        padding: 0.4rem 0.45rem;
+        border: 1px solid #2a2a2a;
+        border-radius: 3px;
+        background: #0e0e0e;
+        color: #aaa;
+        font-size: 0.68rem;
+        line-height: 1.45;
+        font-variant-numeric: tabular-nums;
+      }
+      .scraper-validation .label {
+        color: #777;
+        margin-right: 0.25rem;
+      }
+      .scraper-rotation-prep {
+        margin-top: 0.45rem;
+        padding: 0.4rem 0.45rem;
+        border: 1px solid #2a2a2a;
+        border-radius: 3px;
+        background: #101010;
+        color: #bbb;
+        font-size: 0.68rem;
+        line-height: 1.4;
+        font-variant-numeric: tabular-nums;
+      }
+      .scraper-rotation-prep[hidden] {
+        display: none !important;
+      }
+      .scraper-prep-bar {
+        position: relative;
+        height: 0.45rem;
+        margin: 0.35rem 0 0.3rem;
+        border-radius: 2px;
+        background: #222;
+        overflow: hidden;
+      }
+      .scraper-prep-bar > span {
+        display: block;
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #8a5a20, #f0d090);
+        transition: width 0.15s linear;
+      }
       .cancel-button {
         margin-top: 0.45rem;
         border-color: #743b3b;
@@ -514,6 +667,16 @@
       .view-viewport.dragging {
         cursor: grabbing;
       }
+      .iso-canvas {
+        width: 900px;
+        height: 650px;
+        max-width: 100%;
+        max-height: 100%;
+        background: #000;
+        display: block;
+      }
+        cursor: grabbing;
+      }
       .view-transform {
         transform-origin: center center;
         will-change: transform;
@@ -614,6 +777,9 @@
           <button class="toolbar-btn" id="toolbar-build-scraper" type="button" disabled title="Build Scraper">
             <span class="btn-label">Build Scraper</span>
           </button>
+          <button class="toolbar-btn" id="toolbar-scraper-panel" type="button" disabled title="Panneau Scraper paramétrique">
+            <span class="btn-label">Scraper</span>
+          </button>
         </div>
 
         <div class="toolbar-group" aria-label="Simulation">
@@ -684,6 +850,126 @@
                   <input type="checkbox" data-visibility-toggle="collisions" checked />
                   Collisions
                 </label>
+              </div>
+            </section>
+
+            <section class="accordion-panel" data-panel="scraper" data-expanded="false" id="scraper-panel">
+              <header class="accordion-header">
+                <h2>Scraper</h2>
+                <div class="accordion-actions">
+                  <button class="accordion-toggle" type="button" data-action="expand" aria-label="Développer Scraper">+</button>
+                  <button class="accordion-toggle" type="button" data-action="collapse" aria-label="Réduire Scraper">−</button>
+                </div>
+              </header>
+              <div class="accordion-body">
+                <label class="toggle">
+                  <input type="checkbox" id="scraper-show-toggle" checked />
+                  Afficher
+                </label>
+
+                <p class="panel-section-label">Position</p>
+                <div class="scraper-field-grid">
+                  <label class="scraper-field">Z (mm)<input id="scraper-position-z" type="number" step="0.1" value="50" /></label>
+                </div>
+                <input id="scraper-rotation" type="hidden" value="0" />
+
+                <p class="panel-section-label">PARCOURS ENVELOPPE</p>
+                <div class="scraper-rotation-panel">
+                  <div class="scraper-rotation-angle">
+                    <span>Progression</span>
+                    <strong id="scraper-rotation-display">0.0°</strong>
+                  </div>
+                  <input
+                    id="scraper-rotation-slider"
+                    class="scraper-rotation-slider"
+                    type="range"
+                    min="0"
+                    max="18"
+                    step="1"
+                    value="0"
+                  />
+                  <div class="scraper-rotation-range">
+                    <span id="scraper-frame-status">Frame 1 / 19</span>
+                    <span>0° → 90°</span>
+                  </div>
+                  <div class="scraper-step-row">
+                    <span>Pas</span>
+                    <div class="scraper-step-controls">
+                      <button id="scraper-step-minus" type="button" title="Diminuer le pas">−</button>
+                      <strong id="scraper-step-display">5°</strong>
+                      <button id="scraper-step-plus" type="button" title="Augmenter le pas">+</button>
+                    </div>
+                    <button id="scraper-rotation-reset" type="button">Reset</button>
+                  </div>
+                  <div class="scraper-actions">
+                    <button id="scraper-rotation-play" type="button" title="Play 0→90°">▶ Play</button>
+                    <button id="scraper-rotation-pause" type="button" title="Pause" disabled>⏸ Pause</button>
+                    <label class="scraper-field" style="grid-template-columns: auto auto; margin: 0;">
+                      Vitesse
+                      <select id="scraper-rotation-speed" class="panel-select" style="min-width: 3.5rem;">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="2">2x</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="scraper-rotation-prep" id="scraper-rotation-prep" hidden>
+                    <div><span class="label">Calcul des positions…</span></div>
+                    <div class="scraper-prep-bar" aria-hidden="true">
+                      <span id="scraper-prep-bar-fill"></span>
+                    </div>
+                    <div id="scraper-prep-pct">0%</div>
+                    <div><span id="scraper-prep-count">0 / 0</span></div>
+                    <div>Angle : <span id="scraper-prep-angle">—</span></div>
+                  </div>
+                  <div class="scraper-validation" id="scraper-rotation-validation">
+                    <div><span class="label">VALIDATION</span></div>
+                    <div>Angle courant : <span id="val-angle">—</span></div>
+                    <div>Distance min à l'enveloppe : <span id="val-dist-min">—</span></div>
+                    <div>Distance max à l'enveloppe : <span id="val-dist-max">—</span></div>
+                    <div>Pénétration : <span id="val-penetration">—</span></div>
+                    <div>Collision : <span id="val-collision">—</span></div>
+                    <div>Clearance minimale : <span id="val-clearance-min">—</span></div>
+                    <div>Pose : <span id="val-pose-status">—</span></div>
+                    <div id="val-collision-detail"></div>
+                    <div>Cache : <span id="scraper-cache-status">0 / 0 positions</span></div>
+                    <div id="scraper-playback-status">—</div>
+                  </div>
+                </div>
+
+                <p class="panel-section-label">Géométrie</p>
+                <div class="scraper-field-grid">
+                  <label class="scraper-field">Largeur (mm)<input id="scraper-width" type="number" step="0.1" min="0.1" value="15" /></label>
+                  <label class="scraper-field">Longueur (mm)<input id="scraper-length" type="number" step="0.1" min="0.1" value="60" /></label>
+                  <label class="scraper-field">Épaisseur (mm)<input id="scraper-thickness" type="number" step="0.1" min="0.1" value="4" /></label>
+                </div>
+
+                <p class="panel-section-label">Biseau</p>
+                <div class="scraper-field-grid">
+                  <label class="scraper-field">Angle de biseau (deg)<input id="scraper-bevel" type="number" step="0.1" min="0" max="89" value="30" /></label>
+                </div>
+
+                <p class="panel-section-label">Dépouille</p>
+                <div class="scraper-field-grid">
+                  <label class="scraper-field">Angle de dépouille arrière (deg)<input id="scraper-relief" type="number" step="0.1" min="0" max="89" value="10" /></label>
+                </div>
+
+                <p class="panel-section-label">Vrille</p>
+                <div class="scraper-field-grid">
+                  <label class="scraper-field">Taux de vrille / hélice (deg/mm)<input id="scraper-helix" type="number" step="0.1" value="0" /></label>
+                </div>
+
+                <div class="scraper-actions">
+                  <button class="primary" id="scraper-recalculate" type="button">Recalculer</button>
+                </div>
+
+                <p class="panel-section-label">Profils de test</p>
+                <div class="scraper-actions">
+                  <button id="scraper-profile-a" type="button" title="Biseau 0 · Dépouille 0 · Vrille 0">A — Base</button>
+                  <button id="scraper-profile-b" type="button" title="Biseau 30 · Dépouille 10 · Vrille 0">B — Biseau</button>
+                  <button id="scraper-profile-c" type="button" title="Biseau 30 · Dépouille 10 · Vrille 2">C — Biseau + vrille</button>
+                </div>
+                <p class="upload-hint" id="scraper-param-proof">Paramètres manuels → géométrie → placement paroi</p>
               </div>
             </section>
 
@@ -804,13 +1090,19 @@
               <label for="view-select">Vue</label>
               <select id="view-select" aria-label="Sélecteur de vue">
                 <option value="top" selected>Vue de dessus</option>
+                <option value="bottom">Vue de dessous</option>
                 <option value="side">Vue de profil</option>
                 <option value="left">Vue gauche</option>
                 <option value="right">Vue droite</option>
+                <option value="iso">Vue isométrique</option>
               </select>
+              <label class="toggle" title="Afficher le repère 3D gradué (10 mm)">
+                <input type="checkbox" id="toggle-coordinate-frame" data-layer-toggle="coordinate-frame" checked />
+                Repère
+              </label>
             </div>
             <section class="view-column">
-              <div class="view-label" id="active-view-label">Vue de dessus — plan XZ, selon Y</div>
+              <div class="view-label" id="active-view-label">Vue de dessus (Top View) — œil +Y, regard −Y (repère Y-up)</div>
               <div class="view-stage" id="main-stage"></div>
               <div class="view-dims" id="main-dims"></div>
               <div class="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
@@ -827,35 +1119,60 @@
       const mainDims = document.getElementById("main-dims");
       const activeViewLabel = document.getElementById("active-view-label");
       const viewSelect = document.getElementById("view-select");
-      const VIEW_ORDER = ["top", "side", "left", "right"];
+      const SVG_VIEW_ORDER = [];
+      const CAMERA_VIEW_NAMES = ["top", "bottom", "side", "left", "right", "iso"];
+      const VIEW_ORDER = ["top", "bottom", "side", "left", "right", "iso"];
+      // One 3D scene (visual.stl + scraper). A view is only a different camera.
+      // Opening = AABB max Y (CAD), not Z-up. Top/Bottom are opposite lookAt cameras.
+      // Contour / wireframe toggles are independent of the camera.
       const VIEW_SPECS = {
         side: {
           plane: "XY",
-          viewAxis: "Z",
+          viewAxis: "−Z",
+          cameraEye: "+Z",
           labelFr: "Vue de profil",
           labelEn: "Profile View",
           dimensionAxes: "X × Y",
         },
         top: {
           plane: "XZ",
-          viewAxis: "Y",
+          viewAxis: "−Y",
+          cameraEye: "+Y",
           labelFr: "Vue de dessus",
           labelEn: "Top View",
           dimensionAxes: "X × Z",
         },
+        bottom: {
+          plane: "XZ",
+          viewAxis: "+Y",
+          cameraEye: "−Y",
+          labelFr: "Vue de dessous",
+          labelEn: "Bottom View",
+          dimensionAxes: "X × Z",
+        },
         left: {
           plane: "ZY",
-          viewAxis: "X",
+          viewAxis: "−X",
+          cameraEye: "+X",
           labelFr: "Vue gauche",
           labelEn: "Left View",
           dimensionAxes: "Z × Y",
         },
         right: {
           plane: "-ZY",
-          viewAxis: "-X",
+          viewAxis: "+X",
+          cameraEye: "−X",
           labelFr: "Vue droite",
           labelEn: "Right View",
           dimensionAxes: "−Z × Y",
+        },
+        iso: {
+          plane: "ISO",
+          viewAxis: "−Y/−X/−Z",
+          cameraEye: "+Y+X+Z",
+          labelFr: "Vue isométrique",
+          labelEn: "Isometric View",
+          dimensionAxes: "X × Y × Z",
         },
       };
       let currentViewName = "top";
@@ -863,11 +1180,24 @@
       let cachedViewMeta = {};
       let cachedModelData = null;
       let lastContactOverlayPayload = null;
+      let scene3d = {
+        cameras: null,
+        center: null,
+        convention: null,
+        jar: null,
+        interior: null,
+        scraperRest: null,
+        scraperTransform: null,
+        collision: false,
+        canvas: null,
+        staticCache: null,
+      };
       const API = {
         importStep: "/api/import-step",
         simulateContact: "/api/simulate-contact",
         buildScraper: "/api/build-scraper",
         interiorContour: "/api/interior-contour",
+        viewerScene: "/api/viewer-scene",
         runtime: "/api/runtime",
       };
       const statusElement = document.getElementById("status");
@@ -889,6 +1219,50 @@
       const trajectoryToggle = document.getElementById("toggle-trajectory");
       const toolbarReload = document.getElementById("toolbar-reload-step");
       const toolbarBuildScraper = document.getElementById("toolbar-build-scraper");
+      const toolbarScraperPanel = document.getElementById("toolbar-scraper-panel");
+      const scraperPanel = document.getElementById("scraper-panel");
+      const scraperShowToggle = document.getElementById("scraper-show-toggle");
+      const scraperRecalculateButton = document.getElementById("scraper-recalculate");
+      const scraperParamProof = document.getElementById("scraper-param-proof");
+      const SCRAPER_FIELD_IDS = {
+        width_mm: "scraper-width",
+        length_mm: "scraper-length",
+        thickness_mm: "scraper-thickness",
+        position_z_mm: "scraper-position-z",
+        rotation_angle_deg: "scraper-rotation",
+        bevel_angle_deg: "scraper-bevel",
+        relief_angle_deg: "scraper-relief",
+        helix_rate_deg_per_mm: "scraper-helix",
+      };
+      // Quart-de-tour test UI (0° → 90°). Same variable as engine rotation_angle_deg.
+      // Play caches viewer frames once, then loops without re-calling /api/build-scraper.
+      // Changing "Pas" only changes the play sequence — it never clears geometry frames.
+      const ROTATION_TEST_MIN_DEG = 0;
+      const ROTATION_TEST_MAX_DEG = 90;
+      const ROTATION_STEP_DEFAULT_DEG = 5;
+      const ROTATION_STEP_MIN_DEG = 1;
+      const ROTATION_STEP_MAX_DEG = 30;
+      const ROTATION_REPLAY_BASE_MS = 320; // ms per cached frame at 1x
+      const ROTATION_CACHE_PARAM_KEYS = [
+        "width_mm",
+        "length_mm",
+        "thickness_mm",
+        "position_z_mm",
+        "bevel_angle_deg",
+        "relief_angle_deg",
+        "helix_rate_deg_per_mm",
+        "clearance_mm",
+      ];
+      let rotationStepDeg = ROTATION_STEP_DEFAULT_DEG;
+      /** @type {Map<string, object>} */
+      const rotationCache = new Map();
+      let rotationCacheFingerprint = null;
+      let rotationPlayTimer = null;
+      let rotationPlayRunning = false;
+      let rotationPrepRunning = false;
+      let rotationPrepAbort = false;
+      let rotationFrameIndex = 0;
+      let scraperBuildInFlight = null;
       const CONTACT_LAYER_NAMES = [
         "contact-covered",
         "contact-uncovered",
@@ -936,6 +1310,9 @@
         simulateButton.disabled = running || !activeModelLoaded;
         toolbarReload.disabled = running || !activeModelLoaded;
         toolbarBuildScraper.disabled = running || !activeModelLoaded;
+        if (toolbarScraperPanel) {
+          toolbarScraperPanel.disabled = running || !activeModelLoaded;
+        }
       }
 
       function setSimulationControls(running) {
@@ -1142,39 +1519,711 @@
         }
       }
 
-      async function buildScraperOnly() {
+      function readScraperParametersFromForm() {
+        const parameters = {
+          clearance_mm: 0,
+        };
+        for (const [key, elementId] of Object.entries(SCRAPER_FIELD_IDS)) {
+          const input = document.getElementById(elementId);
+          parameters[key] = Number(input?.value ?? 0);
+        }
+        parameters.rotation_angle_deg = clampRotationAngle(parameters.rotation_angle_deg);
+        return parameters;
+      }
+
+      function writeScraperParametersToForm(parameters) {
+        for (const [key, elementId] of Object.entries(SCRAPER_FIELD_IDS)) {
+          if (parameters[key] == null) continue;
+          const input = document.getElementById(elementId);
+          if (input) input.value = String(parameters[key]);
+        }
+        if (parameters.rotation_angle_deg != null || parameters.rotation_deg != null) {
+          syncRotationControls(
+            Number(parameters.rotation_angle_deg ?? parameters.rotation_deg ?? 0),
+          );
+        }
+      }
+
+      function clampRotationAngle(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return ROTATION_TEST_MIN_DEG;
+        return Math.min(ROTATION_TEST_MAX_DEG, Math.max(ROTATION_TEST_MIN_DEG, n));
+      }
+
+      function clampRotationStep(value) {
+        const n = Math.round(Number(value));
+        if (!Number.isFinite(n)) return ROTATION_STEP_DEFAULT_DEG;
+        return Math.min(ROTATION_STEP_MAX_DEG, Math.max(ROTATION_STEP_MIN_DEG, n));
+      }
+
+      function getRotationStepDeg() {
+        return clampRotationStep(rotationStepDeg);
+      }
+
+      function syncRotationStepControls() {
+        const step = getRotationStepDeg();
+        rotationStepDeg = step;
+        const display = document.getElementById("scraper-step-display");
+        if (display) display.textContent = `${step}°`;
+        const minus = document.getElementById("scraper-step-minus");
+        const plus = document.getElementById("scraper-step-plus");
+        if (minus) minus.disabled = step <= ROTATION_STEP_MIN_DEG;
+        if (plus) plus.disabled = step >= ROTATION_STEP_MAX_DEG;
+        return step;
+      }
+
+      function setRotationStepDeg(value, { stopPlay = true } = {}) {
+        if (stopPlay) stopRotationPlay();
+        const previousAngle = Number(
+          document.getElementById("scraper-rotation")?.value ?? 0,
+        );
+        rotationStepDeg = clampRotationStep(value);
+        syncRotationStepControls();
+        // Animation step is NOT a geometric parameter — keep every cached frame.
+        const frames = animationFrames();
+        const index = nearestPlayIndex(previousAngle, frames);
+        syncFrameNavigator(index);
+        const cached = getRotationFrame(frames[index]);
+        if (cached) applyCachedRotationFrame(cached);
+        updateRotationCacheStatus();
+        setPlaybackStatus(
+          `Pas ${rotationStepDeg}° · ${frames.length} frames d'animation`,
+        );
+        return rotationStepDeg;
+      }
+
+      function rotationCacheKey(angleDeg) {
+        return clampRotationAngle(angleDeg).toFixed(1);
+      }
+
+      function animationFrames() {
+        const step = getRotationStepDeg();
+        const angles = [];
+        for (
+          let angle = ROTATION_TEST_MIN_DEG;
+          angle <= ROTATION_TEST_MAX_DEG + 1e-9;
+          angle += step
+        ) {
+          angles.push(Number(angle.toFixed(1)));
+        }
+        const last = angles[angles.length - 1];
+        if (Math.abs(last - ROTATION_TEST_MAX_DEG) > 1e-9) {
+          angles.push(ROTATION_TEST_MAX_DEG);
+        }
+        return angles;
+      }
+
+      // Alias kept for older call sites / contract tests.
+      function rotationPlayAngles() {
+        return animationFrames();
+      }
+
+      function clampFrameIndex(index, frames = animationFrames()) {
+        const n = Math.round(Number(index));
+        if (!Number.isFinite(n) || frames.length === 0) return 0;
+        return Math.min(frames.length - 1, Math.max(0, n));
+      }
+
+      function nearestPlayIndex(angleDeg, frames = animationFrames()) {
+        const angle = clampRotationAngle(angleDeg);
+        let best = 0;
+        let bestDist = Infinity;
+        for (let index = 0; index < frames.length; index += 1) {
+          const dist = Math.abs(frames[index] - angle);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = index;
+          }
+        }
+        return best;
+      }
+
+      function syncFrameNavigator(frameIndex) {
+        const frames = animationFrames();
+        const index = clampFrameIndex(frameIndex, frames);
+        rotationFrameIndex = index;
+        const angle = frames[index] ?? ROTATION_TEST_MIN_DEG;
+        const hidden = document.getElementById("scraper-rotation");
+        const slider = document.getElementById("scraper-rotation-slider");
+        const display = document.getElementById("scraper-rotation-display");
+        const frameStatus = document.getElementById("scraper-frame-status");
+        if (hidden) hidden.value = String(angle);
+        if (slider) {
+          slider.min = "0";
+          slider.max = String(Math.max(0, frames.length - 1));
+          slider.step = "1";
+          if (Number(slider.value) !== index) slider.value = String(index);
+        }
+        if (display) display.textContent = `${Number(angle).toFixed(1)}°`;
+        if (frameStatus) {
+          frameStatus.textContent = `Frame ${index + 1} / ${frames.length}`;
+        }
+        return { index, angle, frames };
+      }
+
+      function syncRotationControls(angleDeg) {
+        // Map any angle onto the discrete animation-frame grid.
+        return syncFrameNavigator(nearestPlayIndex(angleDeg)).angle;
+      }
+
+      function geometryFingerprint(params = readScraperParametersFromForm()) {
+        const parts = ROTATION_CACHE_PARAM_KEYS.map(
+          (key) => `${key}:${Number(params[key] ?? 0)}`,
+        );
+        return `${currentModelId || ""}|${parts.join("|")}`;
+      }
+
+      function clearRotationCache() {
+        rotationCache.clear();
+        rotationCacheFingerprint = null;
+        updateRotationCacheStatus();
+        setRotationPrepProgress(null);
+        setPlaybackStatus("Cache vide");
+      }
+
+      function ensureRotationCacheFingerprint() {
+        const fingerprint = geometryFingerprint();
+        if (
+          rotationCacheFingerprint !== null &&
+          rotationCacheFingerprint !== fingerprint
+        ) {
+          rotationCache.clear();
+        }
+        rotationCacheFingerprint = fingerprint;
+        updateRotationCacheStatus();
+        return fingerprint;
+      }
+
+      function cloneViewerPayload(value) {
+        return value == null ? value : JSON.parse(JSON.stringify(value));
+      }
+
+      function frameFromBuildResult(result, angleDeg) {
+        const angle = clampRotationAngle(angleDeg);
+        const overlays = cloneViewerPayload(result.overlays) ?? {
+          side: {},
+          top: {},
+          left: {},
+          right: {},
+        };
+        return {
+          angle,
+          overlays,
+          trajectoryOverlays: {
+            side: { "scraper-trajectory": overlays.side?.["scraper-trajectory"] },
+            top: { "scraper-trajectory": overlays.top?.["scraper-trajectory"] },
+            left: { "scraper-trajectory": overlays.left?.["scraper-trajectory"] },
+            right: { "scraper-trajectory": overlays.right?.["scraper-trajectory"] },
+            bottom: { "scraper-trajectory": overlays.bottom?.["scraper-trajectory"] },
+          },
+          validation: cloneViewerPayload(result.validation ?? result.collision),
+          collision: cloneViewerPayload(result.collision ?? result.validation),
+          pose: cloneViewerPayload(result.pose),
+          scraperTransform: cloneViewerPayload(result.scraper_transform),
+          scraperGeometry: cloneViewerPayload(result.scraper_geometry),
+          scraper: cloneViewerPayload(result.scraper),
+          parameters: cloneViewerPayload(result.parameters),
+        };
+      }
+
+      function storeRotationFrame(frame) {
+        ensureRotationCacheFingerprint();
+        rotationCache.set(rotationCacheKey(frame.angle), frame);
+        updateRotationCacheStatus();
+      }
+
+      function getRotationFrame(angleDeg) {
+        ensureRotationCacheFingerprint();
+        return rotationCache.get(rotationCacheKey(angleDeg)) ?? null;
+      }
+
+      function isPlayCacheComplete(frames = animationFrames()) {
+        ensureRotationCacheFingerprint();
+        return frames.every((angle) => rotationCache.has(rotationCacheKey(angle)));
+      }
+
+      function updateRotationCacheStatus() {
+        const frames = animationFrames();
+        const ready = frames.filter((angle) =>
+          rotationCache.has(rotationCacheKey(angle)),
+        ).length;
+        const el = document.getElementById("scraper-cache-status");
+        if (!el) return;
+        if (ready >= frames.length && frames.length > 0) {
+          el.textContent = `${ready} / ${frames.length} frames`;
+        } else {
+          el.textContent =
+            `${ready} / ${frames.length} frames` +
+            ` · ${rotationCache.size} en cache`;
+        }
+      }
+
+      function setPlaybackStatus(text) {
+        const el = document.getElementById("scraper-playback-status");
+        if (el) el.textContent = text || "—";
+      }
+
+      function setRotationPrepProgress(state) {
+        const panel = document.getElementById("scraper-rotation-prep");
+        if (!panel) return;
+        if (!state) {
+          panel.hidden = true;
+          return;
+        }
+        panel.hidden = false;
+        const pct = Math.max(
+          0,
+          Math.min(100, Math.round((100 * state.index) / Math.max(1, state.total))),
+        );
+        const fill = document.getElementById("scraper-prep-bar-fill");
+        const pctEl = document.getElementById("scraper-prep-pct");
+        const countEl = document.getElementById("scraper-prep-count");
+        const angleEl = document.getElementById("scraper-prep-angle");
+        if (fill) fill.style.width = `${pct}%`;
+        if (pctEl) pctEl.textContent = `${pct}%`;
+        if (countEl) countEl.textContent = `${state.index} / ${state.total}`;
+        if (angleEl) {
+          angleEl.textContent =
+            state.angle == null ? "—" : `${Number(state.angle).toFixed(1)}°`;
+        }
+        setPlaybackStatus(
+          `Calcul des positions… ${state.index} / ${state.total}`,
+        );
+      }
+
+      function updateRotationValidation(validation) {
+        const setText = (id, text) => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = text;
+        };
+        const detail = document.getElementById("val-collision-detail");
+        if (!validation) {
+          setText("val-angle", "—");
+          setText("val-dist-min", "—");
+          setText("val-dist-max", "—");
+          setText("val-penetration", "—");
+          setText("val-collision", "—");
+          setText("val-clearance-min", "—");
+          setText("val-pose-status", "—");
+          if (detail) detail.textContent = "";
+          return;
+        }
+        const angle = Number(
+          validation.surface_progress_deg ?? validation.rotation_angle_deg ?? 0,
+        );
+        setText("val-angle", `${angle.toFixed(1)}°`);
+        setText(
+          "val-dist-min",
+          `${Number(validation.distance_min_mm ?? validation.clearance_min_mm ?? 0).toFixed(3)} mm`,
+        );
+        setText(
+          "val-dist-max",
+          `${Number(validation.distance_max_mm ?? validation.clearance_min_mm ?? 0).toFixed(3)} mm`,
+        );
+        setText(
+          "val-penetration",
+          `${Number(validation.penetration_mm ?? 0).toFixed(3)} mm`,
+        );
+        const collisionYes =
+          validation.collision === "YES" || validation.has_collision === true;
+        setText("val-collision", collisionYes ? "YES" : "NO");
+        setText(
+          "val-clearance-min",
+          `${Number(validation.clearance_min_mm ?? validation.distance_min_mm ?? 0).toFixed(2)} mm`,
+        );
+        const poseStatus = String(validation.pose_status ?? (validation.admissible === false ? "INVALID" : "VALID"));
+        setText("val-pose-status", poseStatus);
+        if (detail) {
+          if (poseStatus === "BLOCKED") {
+            detail.textContent = `MOUVEMENT BLOQUÉ — collision avec l'enveloppe intérieure à ${angle.toFixed(1)}°`;
+          } else if (collisionYes) {
+            detail.textContent = `Collision détectée à ${angle.toFixed(1)}°`;
+          } else if (validation.alternative_used) {
+            detail.textContent = `Pose alternative admissible à ${angle.toFixed(1)}°`;
+          } else {
+            detail.textContent = "";
+          }
+        }
+      }
+
+      function frameIsBlocked(frame) {
+        const v = frame?.validation ?? frame?.collision ?? {};
+        return v.pose_status === "BLOCKED" || v.blocked === true;
+      }
+
+      function frameIsAdmissible(frame) {
+        const v = frame?.validation ?? frame?.collision ?? {};
+        if (frameIsBlocked(frame)) return false;
+        if (v.pose_status === "INVALID") return false;
+        if (v.admissible === false) return false;
+        return true;
+      }
+
+      function applyCachedRotationFrame(frame) {
+        syncFrameNavigator(nearestPlayIndex(frame.angle));
+        const admissible = frameIsAdmissible(frame);
+        if (admissible || frameIsBlocked(frame) || frame?.validation?.pose_status === "INVALID") {
+          injectScraperLayersOnly(frame.overlays);
+          trajectoryOverlays = frame.trajectoryOverlays;
+          if (trajectoryToggle) {
+            trajectoryToggle.checked = true;
+            applyLayerVisibility();
+          }
+          if (frame.pose) {
+            poseManifestEntries = [{ index: 0, pose: frame.pose }];
+            currentPoseIndex = 0;
+            syncPoseNavigator();
+          }
+        }
+        updateIsoFromFrame(frame);
+        updateRotationValidation(frame.validation ?? frame.collision);
+        const angle = Number(frame.angle);
+        const z = Number(
+          frame.parameters?.position_z_mm ??
+            readScraperParametersFromForm().position_z_mm ??
+            0,
+        );
+        const blocked = frameIsBlocked(frame);
+        const proof = blocked
+          ? `MOUVEMENT BLOQUÉ — collision enveloppe à θ=${angle.toFixed(1)}°`
+          : `Scraper V1 — ${frame.scraper?.vertex_count ?? "?"} v / ${frame.scraper?.face_count ?? "?"} f · ` +
+            `${frame.scraper?.provenance ?? "cache"} · Z=${z.toFixed(1)} mm · ` +
+            `θ=${angle.toFixed(1)}° · cache`;
+        scraperPoseProof.textContent = proof;
+        if (scraperParamProof) scraperParamProof.textContent = proof;
+        updateRotationCacheStatus();
+        return admissible;
+      }
+
+      function setRotationPlayUi(running) {
+        rotationPlayRunning = running;
+        const playBtn = document.getElementById("scraper-rotation-play");
+        const pauseBtn = document.getElementById("scraper-rotation-pause");
+        if (playBtn) playBtn.disabled = running || rotationPrepRunning;
+        if (pauseBtn) pauseBtn.disabled = !(running || rotationPrepRunning);
+      }
+
+      function stopRotationPlay() {
+        rotationPrepAbort = true;
+        if (rotationPlayTimer != null) {
+          clearTimeout(rotationPlayTimer);
+          rotationPlayTimer = null;
+        }
+        rotationPlayRunning = false;
+        setRotationPlayUi(false);
+      }
+
+      async function showFrameAtIndex(frameIndex, { allowCompute = null } = {}) {
+        ensureRotationCacheFingerprint();
+        const { index, angle, frames } = syncFrameNavigator(frameIndex);
+        const cached = getRotationFrame(angle);
+        if (cached) {
+          applyCachedRotationFrame(cached);
+          if (!rotationPlayRunning && !rotationPrepRunning) {
+            setPlaybackStatus(
+              `Lecture du cache · ${Number(angle).toFixed(1)}° / ${ROTATION_TEST_MAX_DEG}°`,
+            );
+            setStatus("Lecture du cache", "ready");
+          }
+          return angle;
+        }
+        const canCompute =
+          allowCompute == null ? !isPlayCacheComplete(frames) : Boolean(allowCompute);
+        if (!canCompute) {
+          setPlaybackStatus(
+            `Frame ${index + 1} absente · pas de recalcul (cache attendu)`,
+          );
+          return angle;
+        }
+        return setRotationAngle(angle);
+      }
+
+      async function setRotationAngle(thetaDeg, { rebuild = true } = {}) {
+        ensureRotationCacheFingerprint();
+        const angle = syncRotationControls(thetaDeg);
+        if (!rebuild) return angle;
+        const cached = getRotationFrame(angle);
+        if (cached) {
+          applyCachedRotationFrame(cached);
+          if (!rotationPlayRunning && !rotationPrepRunning) {
+            setPlaybackStatus(
+              `Lecture du cache · ${angle.toFixed(1)}° / ${ROTATION_TEST_MAX_DEG}°`,
+            );
+            setStatus("Lecture du cache", "ready");
+          }
+          return angle;
+        }
+        const parameters = readScraperParametersFromForm();
+        parameters.rotation_angle_deg = angle;
+        const result = await buildScraperOnly(parameters);
+        if (result) storeRotationFrame(frameFromBuildResult(result, angle));
+        if (!rotationPlayRunning && !rotationPrepRunning) {
+          setPlaybackStatus(`Position ajoutée au cache · ${angle.toFixed(1)}°`);
+        }
+        return angle;
+      }
+
+      async function resetRotationAngle() {
+        stopRotationPlay();
+        setRotationPrepProgress(null);
+        await showFrameAtIndex(0, { allowCompute: !isPlayCacheComplete() });
+        setPlaybackStatus(`Reset · Frame 1 / ${animationFrames().length}`);
+      }
+
+      function rotationReplayIntervalMs() {
+        const speed = Number(document.getElementById("scraper-rotation-speed")?.value ?? 1);
+        const safe = Number.isFinite(speed) && speed > 0 ? speed : 1;
+        return Math.max(40, ROTATION_REPLAY_BASE_MS / safe);
+      }
+
+      async function prepareRotationCache(frames) {
+        rotationPrepRunning = true;
+        rotationPrepAbort = false;
+        setRotationPlayUi(true);
+        setStatus("Calcul des positions…", "loading");
+        try {
+          let computed = 0;
+          for (let index = 0; index < frames.length; index += 1) {
+            if (rotationPrepAbort) {
+              setStatus("Préparation interrompue", "ready");
+              setPlaybackStatus("Calcul interrompu");
+              return false;
+            }
+            const angle = frames[index];
+            setRotationPrepProgress({
+              index,
+              total: frames.length,
+              angle,
+            });
+            syncFrameNavigator(index);
+            const already = getRotationFrame(angle);
+            if (!already) computed += 1;
+            await setRotationAngle(angle);
+            setRotationPrepProgress({
+              index: index + 1,
+              total: frames.length,
+              angle,
+            });
+          }
+          setRotationPrepProgress({
+            index: frames.length,
+            total: frames.length,
+            angle: frames[frames.length - 1],
+          });
+          setPlaybackStatus(
+            computed > 0
+              ? `Préparation terminée · ${computed} nouvelles frames`
+              : "Préparation terminée · cache déjà complet",
+          );
+          return !rotationPrepAbort && isPlayCacheComplete(frames);
+        } finally {
+          rotationPrepRunning = false;
+          setRotationPlayUi(rotationPlayRunning);
+        }
+      }
+
+      function scheduleRotationReplayTick() {
+        if (!rotationPlayRunning) return;
+        rotationPlayTimer = setTimeout(() => {
+          rotationReplayTick();
+        }, rotationReplayIntervalMs());
+      }
+
+      function rotationReplayTick() {
+        if (!rotationPlayRunning) return;
+        const frames = animationFrames();
+        if (!isPlayCacheComplete(frames)) {
+          stopRotationPlay();
+          setStatus("Cache rotation incomplet — relancer Play", "error");
+          return;
+        }
+        rotationFrameIndex = clampFrameIndex(rotationFrameIndex, frames);
+        const angle = frames[rotationFrameIndex];
+        const frame = getRotationFrame(angle);
+        if (!frame) {
+          stopRotationPlay();
+          setStatus(`Frame manquante à ${angle}°`, "error");
+          return;
+        }
+        applyCachedRotationFrame(frame);
+        if (frameIsBlocked(frame)) {
+          stopRotationPlay();
+          setPlaybackStatus(
+            `MOUVEMENT BLOQUÉ · ${Number(angle).toFixed(1)}° / ${ROTATION_TEST_MAX_DEG}°`,
+          );
+          setStatus(
+            `MOUVEMENT BLOQUÉ — collision avec l'enveloppe intérieure à ${Number(angle).toFixed(1)}°`,
+            "error",
+          );
+          return;
+        }
+        setPlaybackStatus(
+          `Lecture du cache · ${Number(angle).toFixed(1)}° / ${ROTATION_TEST_MAX_DEG}°`,
+        );
+        setStatus(
+          `Replay ${Number(angle).toFixed(1)}° (frame ${rotationFrameIndex + 1}/${frames.length})`,
+          "ready",
+        );
+        rotationFrameIndex = (rotationFrameIndex + 1) % frames.length;
+        scheduleRotationReplayTick();
+      }
+
+      async function startRotationPlay() {
+        if (rotationPlayRunning || rotationPrepRunning) return;
+        if (!activeModelLoaded || !currentModelId) {
+          setStatus("Importez un modèle STEP avant le play", "error");
+          return;
+        }
+        ensureRotationCacheFingerprint();
+        const frames = animationFrames();
+        if (!isPlayCacheComplete(frames)) {
+          const ready = await prepareRotationCache(frames);
+          if (!ready) {
+            setRotationPlayUi(false);
+            return;
+          }
+          setRotationPrepProgress(null);
+        }
+        rotationFrameIndex = clampFrameIndex(rotationFrameIndex, frames);
+        rotationPlayRunning = true;
+        setRotationPlayUi(true);
+        setStatus("Replay rotation (cache)…", "ready");
+        rotationReplayTick();
+      }
+
+      function syncScraperVisibilityToggles(sourceCheckbox) {
+        const calquesToggle = document.querySelector(
+          '#sidebar-accordions [data-visibility-toggle="scraper"]',
+        );
+        const checked = Boolean(sourceCheckbox?.checked);
+        if (scraperShowToggle && sourceCheckbox !== scraperShowToggle) {
+          scraperShowToggle.checked = checked;
+        }
+        if (calquesToggle && sourceCheckbox !== calquesToggle) {
+          calquesToggle.checked = checked;
+        }
+        applyLayerVisibility();
+      }
+
+      function toggleScraperPanel() {
+        if (!scraperPanel) return;
+        const open = scraperPanel.dataset.expanded !== "true";
+        setPanelExpanded(scraperPanel, open);
+        if (toolbarScraperPanel) {
+          toolbarScraperPanel.dataset.active = String(open);
+        }
+      }
+
+      async function buildScraperOnly(parametersOverride = null) {
         if (!activeModelLoaded || !currentModelId) {
           setStatus("Importez un modèle STEP avant le build", "error");
           return;
         }
-        setStatus("Construction du Scraper3D…", "loading");
+        const parameters = parametersOverride ?? readScraperParametersFromForm();
+        parameters.rotation_angle_deg = clampRotationAngle(parameters.rotation_angle_deg);
+        ensureRotationCacheFingerprint();
+        writeScraperParametersToForm(parameters);
+        setStatus("Construction du Scraper paramétrique…", "loading");
         toolbarBuildScraper.disabled = true;
-        try {
+        if (scraperRecalculateButton) scraperRecalculateButton.disabled = true;
+        const buildPromise = (async () => {
           const response = await fetch(API.buildScraper, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model_id: currentModelId }),
+            body: JSON.stringify({ model_id: currentModelId, parameters }),
             cache: "no-store",
           });
           const result = await readJsonResponse(response);
           if (!response.ok) {
             throw new Error(formatServerError(result, `Échec build Scraper (${response.status})`));
           }
+          return result;
+        })();
+        scraperBuildInFlight = buildPromise;
+        try {
+          const result = await buildPromise;
+          if (result.parameters) writeScraperParametersToForm(result.parameters);
+          else syncRotationControls(parameters.rotation_angle_deg);
+          const blockedLive =
+            result.validation?.pose_status === "BLOCKED" ||
+            result.collision?.pose_status === "BLOCKED" ||
+            result.validation?.pose_status === "INVALID" ||
+            result.collision?.pose_status === "INVALID";
           injectScraperLayersOnly(result.overlays);
+          trajectoryOverlays = {
+            side: { "scraper-trajectory": result.overlays?.side?.["scraper-trajectory"] },
+            top: { "scraper-trajectory": result.overlays?.top?.["scraper-trajectory"] },
+            left: { "scraper-trajectory": result.overlays?.left?.["scraper-trajectory"] },
+            right: { "scraper-trajectory": result.overlays?.right?.["scraper-trajectory"] },
+            bottom: { "scraper-trajectory": result.overlays?.bottom?.["scraper-trajectory"] },
+          };
+          if (trajectoryToggle) {
+            trajectoryToggle.checked = true;
+            applyLayerVisibility();
+          }
           if (result.pose) {
             poseManifestEntries = [{ index: 0, pose: result.pose }];
             currentPoseIndex = 0;
             syncPoseNavigator();
           }
-          scraperPoseProof.textContent =
-            `Scraper3D V1 — ${result.scraper.vertex_count} v / ${result.scraper.face_count} f · ${result.scraper.provenance}`;
-          setStatus("Scraper3D construit", "ready");
+          updateIsoFromBuildResult(result);
+          updateRotationValidation(result.validation ?? result.collision);
+          const angle = Number(
+            result.parameters?.rotation_angle_deg ?? parameters.rotation_angle_deg ?? 0,
+          );
+          storeRotationFrame(frameFromBuildResult(result, angle));
+          const blocked = blockedLive;
+          const proof = blocked
+            ? `MOUVEMENT BLOQUÉ — collision enveloppe à θ=${angle.toFixed(1)}°`
+            : `Scraper V1 — ${result.scraper.vertex_count} v / ${result.scraper.face_count} f · ` +
+              `${result.scraper.provenance} · Z=${Number(parameters.position_z_mm).toFixed(1)} mm · ` +
+              `θ=${angle.toFixed(1)}°`;
+          scraperPoseProof.textContent = proof;
+          if (scraperParamProof) scraperParamProof.textContent = proof;
+          const calquesToggle = document.querySelector(
+            '#sidebar-accordions [data-visibility-toggle="scraper"]',
+          );
+          if (calquesToggle && !calquesToggle.checked) {
+            calquesToggle.checked = true;
+            if (scraperShowToggle) scraperShowToggle.checked = true;
+            applyLayerVisibility();
+          }
+          if (!rotationPlayRunning && !rotationPrepRunning) {
+            if (blocked) {
+              setStatus("MOUVEMENT BLOQUÉ — collision enveloppe intérieure", "error");
+            } else {
+              setStatus("Scraper paramétrique prêt", "ready");
+            }
+          }
+          return result;
         } catch (error) {
+          updateRotationValidation(null);
           setStatus(error.message.split("\n")[0], "error");
           console.error("[viewer:build-scraper]", error);
+          throw error;
         } finally {
+          if (scraperBuildInFlight === buildPromise) scraperBuildInFlight = null;
           syncToolbarState(Boolean(activeSimulation));
+          if (scraperRecalculateButton) scraperRecalculateButton.disabled = false;
         }
+      }
+
+      function applyScraperTestProfile(profileKey) {
+        stopRotationPlay();
+        const current = readScraperParametersFromForm();
+        const profiles = {
+          A: { bevel_angle_deg: 0, relief_angle_deg: 0, helix_rate_deg_per_mm: 0 },
+          B: { bevel_angle_deg: 30, relief_angle_deg: 10, helix_rate_deg_per_mm: 0 },
+          C: { bevel_angle_deg: 30, relief_angle_deg: 10, helix_rate_deg_per_mm: 2 },
+        };
+        const patch = profiles[profileKey];
+        if (!patch) return;
+        const next = { ...current, ...patch };
+        writeScraperParametersToForm(next);
+        ensureRotationCacheFingerprint();
+        buildScraperOnly(next).catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
       }
 
       function overlaysForCurrentView() {
@@ -1207,6 +2256,7 @@
             top: overlayPayload?.top ?? {},
             left: overlayPayload?.left ?? {},
             right: overlayPayload?.right ?? {},
+            bottom: overlayPayload?.bottom ?? {},
           },
         };
         applyStoredOverlays();
@@ -1510,6 +2560,9 @@
       function clearGraphics(message = "Sélectionnez un fichier STEP") {
         activeModelLoaded = false;
         currentModelId = null;
+        stopRotationPlay();
+        clearRotationCache();
+        setRotationPrepProgress(null);
         completedSimulation = null;
         poseRequestSequence += 1;
         poseSelect.replaceChildren(new Option("Aucune simulation", ""));
@@ -1526,6 +2579,16 @@
         cachedViewMeta = {};
         cachedModelData = null;
         lastContactOverlayPayload = null;
+        scene3d.cameras = null;
+        scene3d.center = null;
+        scene3d.convention = null;
+        scene3d.jar = null;
+        scene3d.interior = null;
+        scene3d.scraperRest = null;
+        scene3d.scraperTransform = null;
+        scene3d.collision = false;
+        scene3d.canvas = null;
+        scene3d.staticCache = null;
         currentViewName = "top";
         if (viewSelect) viewSelect.value = "top";
         activeViewLabel.textContent = formatViewLabel("top", VIEW_SPECS.top);
@@ -1542,7 +2605,534 @@
           .join("");
       }
 
+      function flattenArray(values, TypedArray) {
+        if (!values) return null;
+        if (ArrayBuffer.isView(values)) return values;
+        return TypedArray.from(values.flat ? values.flat() : values);
+      }
+
+      function flattenMesh(mesh) {
+        if (!mesh) return null;
+        return {
+          vertices: flattenArray(mesh.vertices, Float32Array),
+          faces: flattenArray(mesh.faces, Uint32Array),
+          edges: flattenArray(mesh.edges, Uint32Array),
+        };
+      }
+
+      function transformPoint(matrix, x, y, z, out, index) {
+        out[index] =
+          matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3];
+        out[index + 1] =
+          matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3];
+        out[index + 2] =
+          matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3];
+      }
+
+      function posedScraperVertices(geometry, matrix) {
+        const src = geometry.vertices;
+        const out = new Float32Array(src.length);
+        if (!matrix) {
+          out.set(src);
+          return out;
+        }
+        for (let i = 0; i < src.length; i += 3) {
+          transformPoint(matrix, src[i], src[i + 1], src[i + 2], out, i);
+        }
+        return out;
+      }
+
+      function lookAtBasis(eye, target, up) {
+        const zx = eye[0] - target[0];
+        const zy = eye[1] - target[1];
+        const zz = eye[2] - target[2];
+        const zLen = Math.hypot(zx, zy, zz) || 1;
+        const z = [zx / zLen, zy / zLen, zz / zLen];
+        const xx = up[1] * z[2] - up[2] * z[1];
+        const xy = up[2] * z[0] - up[0] * z[2];
+        const xz = up[0] * z[1] - up[1] * z[0];
+        const xLen = Math.hypot(xx, xy, xz) || 1;
+        const x = [xx / xLen, xy / xLen, xz / xLen];
+        const y = [
+          z[1] * x[2] - z[2] * x[1],
+          z[2] * x[0] - z[0] * x[2],
+          z[0] * x[1] - z[1] * x[0],
+        ];
+        return { x, y, z };
+      }
+
+      function cameraFromPreset(preset, width, height, bounds) {
+        const eye = preset.eye;
+        const target = preset.target;
+        const basis = preset.basis
+          ? { x: preset.basis.x, y: preset.basis.y, z: preset.basis.z }
+          : lookAtBasis(eye, target, preset.up);
+        const span = Math.max(
+          bounds.max[0] - bounds.min[0],
+          bounds.max[1] - bounds.min[1],
+          bounds.max[2] - bounds.min[2],
+          1,
+        );
+        return {
+          eye,
+          target,
+          ...basis,
+          width,
+          height,
+          projection: preset.projection || "perspective",
+          focal: Math.min(width, height) * 0.95,
+          orthoScale: (Math.min(width, height) * 0.42) / (span * 0.5),
+        };
+      }
+
+      function projectPoint(px, py, pz, camera) {
+        const dx = px - camera.eye[0];
+        const dy = py - camera.eye[1];
+        const dz = pz - camera.eye[2];
+        const camZ = dx * camera.z[0] + dy * camera.z[1] + dz * camera.z[2];
+        const depth = -camZ;
+        const camX = dx * camera.x[0] + dy * camera.x[1] + dz * camera.x[2];
+        const camY = dx * camera.y[0] + dy * camera.y[1] + dz * camera.y[2];
+        const scale =
+          camera.projection === "orthographic"
+            ? camera.orthoScale
+            : camera.focal / Math.max(depth, 1);
+        return {
+          x: camera.width * 0.5 + camX * scale,
+          y: camera.height * 0.5 - camY * scale,
+          depth,
+        };
+      }
+
+      function collectTriangles(mesh, color, alpha, camera, items, cullBackfaces) {
+        if (!mesh?.vertices || !mesh.faces) return;
+        const v = mesh.vertices;
+        const f = mesh.faces;
+        for (let i = 0; i < f.length; i += 3) {
+          const ia = f[i] * 3;
+          const ib = f[i + 1] * 3;
+          const ic = f[i + 2] * 3;
+          const a = projectPoint(v[ia], v[ia + 1], v[ia + 2], camera);
+          const b = projectPoint(v[ib], v[ib + 1], v[ib + 2], camera);
+          const c = projectPoint(v[ic], v[ic + 1], v[ic + 2], camera);
+          if (a.depth <= 0.01 || b.depth <= 0.01 || c.depth <= 0.01) continue;
+          if (cullBackfaces) {
+            const abx = b.x - a.x;
+            const aby = b.y - a.y;
+            const acx = c.x - a.x;
+            const acy = c.y - a.y;
+            if (abx * acy - aby * acx <= 0) continue;
+          }
+          items.push({
+            kind: "triangle",
+            depth: (a.depth + b.depth + c.depth) / 3,
+            a,
+            b,
+            c,
+            color,
+            alpha,
+          });
+        }
+      }
+
+      function collectEdges(mesh, color, alpha, camera, items, lineWidth) {
+        if (!mesh?.vertices || !mesh.edges) return;
+        const v = mesh.vertices;
+        const e = mesh.edges;
+        for (let i = 0; i < e.length; i += 2) {
+          const ia = e[i] * 3;
+          const ib = e[i + 1] * 3;
+          const a = projectPoint(v[ia], v[ia + 1], v[ia + 2], camera);
+          const b = projectPoint(v[ib], v[ib + 1], v[ib + 2], camera);
+          if (a.depth <= 0.01 || b.depth <= 0.01) continue;
+          items.push({
+            kind: "edge",
+            depth: (a.depth + b.depth) * 0.5 - 0.2,
+            a,
+            b,
+            color,
+            alpha,
+            lineWidth: lineWidth ?? 0.9,
+          });
+        }
+      }
+
+      function collectSilhouetteEdges(mesh, color, alpha, camera, items, lineWidth) {
+        if (!mesh?.vertices || !mesh.faces) return;
+        const v = mesh.vertices;
+        const f = mesh.faces;
+        const zx = camera.z[0];
+        const zy = camera.z[1];
+        const zz = camera.z[2];
+        const faceCount = f.length / 3;
+        const front = new Uint8Array(faceCount);
+        for (let i = 0; i < faceCount; i += 1) {
+          const ia = f[i * 3] * 3;
+          const ib = f[i * 3 + 1] * 3;
+          const ic = f[i * 3 + 2] * 3;
+          const ax = v[ia];
+          const ay = v[ia + 1];
+          const az = v[ia + 2];
+          const ux = v[ib] - ax;
+          const uy = v[ib + 1] - ay;
+          const uz = v[ib + 2] - az;
+          const wx = v[ic] - ax;
+          const wy = v[ic + 1] - ay;
+          const wz = v[ic + 2] - az;
+          const nx = uy * wz - uz * wy;
+          const ny = uz * wx - ux * wz;
+          const nz = ux * wy - uy * wx;
+          front[i] = nx * zx + ny * zy + nz * zz > 0 ? 1 : 0;
+        }
+        const edgeFaces = new Map();
+        const addEdge = (aIdx, bIdx, faceIndex) => {
+          const lo = aIdx < bIdx ? aIdx : bIdx;
+          const hi = aIdx < bIdx ? bIdx : aIdx;
+          const key = `${lo},${hi}`;
+          let rec = edgeFaces.get(key);
+          if (!rec) {
+            rec = { a: lo, b: hi, fronts: 0, backs: 0 };
+            edgeFaces.set(key, rec);
+          }
+          if (front[faceIndex]) rec.fronts += 1;
+          else rec.backs += 1;
+        };
+        for (let i = 0; i < faceCount; i += 1) {
+          addEdge(f[i * 3], f[i * 3 + 1], i);
+          addEdge(f[i * 3 + 1], f[i * 3 + 2], i);
+          addEdge(f[i * 3 + 2], f[i * 3], i);
+        }
+        for (const rec of edgeFaces.values()) {
+          const isBoundary = rec.fronts + rec.backs === 1;
+          const isSilhouette = rec.fronts > 0 && rec.backs > 0;
+          if (!isBoundary && !isSilhouette) continue;
+          const ia = rec.a * 3;
+          const ib = rec.b * 3;
+          const a = projectPoint(v[ia], v[ia + 1], v[ia + 2], camera);
+          const b = projectPoint(v[ib], v[ib + 1], v[ib + 2], camera);
+          if (a.depth <= 0.01 || b.depth <= 0.01) continue;
+          items.push({
+            kind: "edge",
+            depth: (a.depth + b.depth) * 0.5 - 0.2,
+            a,
+            b,
+            color,
+            alpha,
+            lineWidth: lineWidth ?? 2,
+          });
+        }
+      }
+
+      function isLayerEnabled(layerName) {
+        const toggle = document.querySelector(`[data-layer-toggle="${layerName}"]`);
+        if (!toggle) return layerName === "contour";
+        return toggle.checked;
+      }
+
+      function meshBounds(mesh) {
+        const v = mesh.vertices;
+        const min = [Infinity, Infinity, Infinity];
+        const max = [-Infinity, -Infinity, -Infinity];
+        for (let i = 0; i < v.length; i += 3) {
+          min[0] = Math.min(min[0], v[i]);
+          min[1] = Math.min(min[1], v[i + 1]);
+          min[2] = Math.min(min[2], v[i + 2]);
+          max[0] = Math.max(max[0], v[i]);
+          max[1] = Math.max(max[1], v[i + 1]);
+          max[2] = Math.max(max[2], v[i + 2]);
+        }
+        return { min, max };
+      }
+
+      function collectCoordinateFrame(center, length, camera, items) {
+        const axes = [
+          { dir: [1, 0, 0], color: "#ff4d4d" },
+          { dir: [0, 1, 0], color: "#3ddc84" },
+          { dir: [0, 0, 1], color: "#4d8dff" },
+        ];
+        for (const axis of axes) {
+          const a = projectPoint(center[0], center[1], center[2], camera);
+          const b = projectPoint(
+            center[0] + axis.dir[0] * length,
+            center[1] + axis.dir[1] * length,
+            center[2] + axis.dir[2] * length,
+            camera,
+          );
+          items.push({
+            kind: "edge",
+            depth: Math.min(a.depth, b.depth) - 2,
+            a,
+            b,
+            color: axis.color,
+            alpha: 1,
+            lineWidth: 2.4,
+          });
+        }
+      }
+
+      function fmtVec3(values) {
+        return `[${values.map((v) => Number(v).toFixed(1)).join(", ")}]`;
+      }
+
+      function cameraOppositionDebug() {
+        const top = scene3d.cameras?.top;
+        const bottom = scene3d.cameras?.bottom;
+        const center = scene3d.center;
+        if (!top || !bottom || !center) return null;
+        const topOff = [
+          top.eye[0] - center[0],
+          top.eye[1] - center[1],
+          top.eye[2] - center[2],
+        ];
+        const bottomOff = [
+          bottom.eye[0] - center[0],
+          bottom.eye[1] - center[1],
+          bottom.eye[2] - center[2],
+        ];
+        const posErr = Math.hypot(
+          bottomOff[0] + topOff[0],
+          bottomOff[1] + topOff[1],
+          bottomOff[2] + topOff[2],
+        );
+        const dirErr = Math.hypot(
+          bottom.look_direction[0] + top.look_direction[0],
+          bottom.look_direction[1] + top.look_direction[1],
+          bottom.look_direction[2] + top.look_direction[2],
+        );
+        return {
+          top,
+          bottom,
+          center,
+          posErr,
+          dirErr,
+          opposed: posErr < 1e-6 && dirErr < 1e-6,
+        };
+      }
+
+      function drawCameraDebugOverlay(ctx, viewName) {
+        const preset = scene3d.cameras?.[viewName];
+        const debug = cameraOppositionDebug();
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.font = "12px ui-monospace, SFMono-Regular, Consolas, monospace";
+        ctx.fillStyle = "#c8c8c8";
+        const lines = [
+          `${viewName.toUpperCase()} eye ${preset ? fmtVec3(preset.eye) : "?"}  look ${preset ? fmtVec3(preset.look_direction) : "?"}`,
+        ];
+        if (debug && (viewName === "top" || viewName === "bottom")) {
+          lines.push(
+            `TOP eye ${fmtVec3(debug.top.eye)}  look ${fmtVec3(debug.top.look_direction)}`,
+            `BOT eye ${fmtVec3(debug.bottom.eye)}  look ${fmtVec3(debug.bottom.look_direction)}`,
+            `BOT-C ≈ -(TOP-C)  err=${debug.posErr.toExponential(1)}`,
+            `BOT look ≈ -TOP look  err=${debug.dirErr.toExponential(1)}  ${debug.opposed ? "OK" : "FAIL"}`,
+          );
+        }
+        lines.forEach((line, index) => {
+          ctx.fillText(line, 12, 22 + index * 16);
+        });
+        ctx.restore();
+      }
+
+      function isCameraView(viewName) {
+        return CAMERA_VIEW_NAMES.includes(viewName);
+      }
+
+      function drawScene3D(canvas, viewName) {
+        const ctx = canvas.getContext("2d");
+        const width = canvas.width;
+        const height = canvas.height;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, width, height);
+        const preset = scene3d.cameras?.[viewName];
+        if (!preset) {
+          ctx.fillStyle = "#888";
+          ctx.font = "16px sans-serif";
+          ctx.fillText("Caméra 3D indisponible — rechargez le modèle", 24, 40);
+          return;
+        }
+        const bounds = scene3d.jar
+          ? meshBounds(scene3d.jar)
+          : { min: [-40, 0, -40], max: [40, 80, 40] };
+        const camera = cameraFromPreset(preset, width, height, bounds);
+        const showPot =
+          document.querySelector('[data-visibility-toggle="pot"]')?.checked !== false;
+        const showScraper =
+          document.querySelector('[data-visibility-toggle="scraper"]')?.checked !== false;
+        const showInterior =
+          document.querySelector('[data-visibility-toggle="envelope"]')?.checked === true;
+        const showContour = isLayerEnabled("contour");
+        const showWireframe = isLayerEnabled("wireframe");
+        const showFrame = isLayerEnabled("coordinate-frame");
+        const staticKey =
+          `${viewName}|${width}x${height}|pot:${showPot}|int:${showInterior}` +
+          `|contour:${showContour}|wire:${showWireframe}|frame:${showFrame}`;
+        let items;
+        if (scene3d.staticCache && scene3d.staticCache.key === staticKey) {
+          items = scene3d.staticCache.items.slice();
+        } else {
+          items = [];
+          if (showPot && scene3d.jar) {
+            collectTriangles(scene3d.jar, "#5c5c5c", 0.88, camera, items, true);
+            if (showContour) {
+              collectSilhouetteEdges(scene3d.jar, "#ffffff", 1, camera, items, 2);
+            }
+            if (showWireframe) {
+              collectEdges(scene3d.jar, "#777777", 0.55, camera, items, 0.65);
+            }
+          }
+          if (showInterior && scene3d.interior) {
+            collectTriangles(scene3d.interior, "#55ffff", 0.32, camera, items, true);
+            if (showContour) {
+              collectSilhouetteEdges(scene3d.interior, "#a855f7", 1, camera, items, 1.1);
+            }
+            if (showWireframe) {
+              collectEdges(scene3d.interior, "#55ffff", 0.55, camera, items, 0.65);
+            }
+          }
+          if (showFrame) {
+            const origin = scene3d.center || [
+              (bounds.min[0] + bounds.max[0]) * 0.5,
+              (bounds.min[1] + bounds.max[1]) * 0.5,
+              (bounds.min[2] + bounds.max[2]) * 0.5,
+            ];
+            const axisLen = Math.max(
+              bounds.max[0] - bounds.min[0],
+              bounds.max[1] - bounds.min[1],
+              bounds.max[2] - bounds.min[2],
+              40,
+            ) * 0.45;
+            collectCoordinateFrame(origin, axisLen, camera, items);
+          }
+          scene3d.staticCache = { key: staticKey, items: items.slice() };
+        }
+        if (showScraper && scene3d.scraperRest) {
+          const posed = {
+            vertices: posedScraperVertices(scene3d.scraperRest, scene3d.scraperTransform),
+            faces: scene3d.scraperRest.faces,
+          };
+          const color = scene3d.collision ? "#ff6b6b" : "#f2c94c";
+          collectTriangles(posed, color, 0.92, camera, items, true);
+        }
+        items.sort((a, b) => b.depth - a.depth);
+        for (const item of items) {
+          if (item.kind === "triangle") {
+            ctx.beginPath();
+            ctx.moveTo(item.a.x, item.a.y);
+            ctx.lineTo(item.b.x, item.b.y);
+            ctx.lineTo(item.c.x, item.c.y);
+            ctx.closePath();
+            ctx.globalAlpha = item.alpha;
+            ctx.fillStyle = item.color;
+            ctx.fill();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(item.a.x, item.a.y);
+            ctx.lineTo(item.b.x, item.b.y);
+            ctx.globalAlpha = item.alpha;
+            ctx.strokeStyle = item.color;
+            ctx.lineWidth = item.lineWidth;
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+        drawCameraDebugOverlay(ctx, viewName);
+      }
+
+      async function loadViewerScene(modelId, signal) {
+        if (!modelId) return;
+        const response = await fetch(
+          `${API.viewerScene}?model_id=${encodeURIComponent(modelId)}`,
+          { cache: "no-store", signal },
+        );
+        if (!response.ok) {
+          throw new Error("Scène 3D introuvable (GET /api/viewer-scene)");
+        }
+        const payload = await response.json();
+        scene3d.cameras = payload.cameras;
+        scene3d.center = payload.center_mm ?? null;
+        scene3d.convention = payload.convention;
+        scene3d.jar = flattenMesh(payload.jar);
+        scene3d.interior = flattenMesh(payload.interior);
+        scene3d.staticCache = null;
+        const debug = cameraOppositionDebug();
+        if (debug) {
+          console.info("[viewer:cameras]", {
+            vertical: payload.convention?.vertical_axis,
+            opening: payload.convention?.opening,
+            base: payload.convention?.base,
+            center: debug.center,
+            top_eye: debug.top.eye,
+            bottom_eye: debug.bottom.eye,
+            top_look: debug.top.look_direction,
+            bottom_look: debug.bottom.look_direction,
+            position_opposed: debug.posErr < 1e-6,
+            direction_opposed: debug.dirErr < 1e-6,
+          });
+        }
+      }
+
+      function redrawCameraView() {
+        if (!isCameraView(currentViewName)) return;
+        if (scene3d.canvas && scene3d.canvas.isConnected) {
+          drawScene3D(scene3d.canvas, currentViewName);
+          return;
+        }
+        renderScene3DView(currentViewName);
+      }
+
+      function updateIsoFromBuildResult(result) {
+        if (result?.scraper_geometry) {
+          scene3d.scraperRest = flattenMesh(result.scraper_geometry);
+        }
+        if (result?.scraper_transform) {
+          scene3d.scraperTransform = result.scraper_transform;
+        }
+        scene3d.collision =
+          result?.validation?.has_collision === true ||
+          result?.collision?.has_collision === true ||
+          result?.validation?.collision === "YES";
+        redrawCameraView();
+      }
+
+      function updateIsoFromFrame(frame) {
+        if (frame?.scraperGeometry) {
+          scene3d.scraperRest = flattenMesh(frame.scraperGeometry);
+        }
+        if (frame?.scraperTransform) {
+          scene3d.scraperTransform = frame.scraperTransform;
+        }
+        scene3d.collision =
+          frame?.validation?.has_collision === true ||
+          frame?.collision?.has_collision === true ||
+          frame?.validation?.collision === "YES";
+        redrawCameraView();
+      }
+
+      function renderScene3DView(viewName) {
+        const view = VIEW_SPECS[viewName];
+        const canvas = document.createElement("canvas");
+        canvas.className = "iso-canvas";
+        canvas.width = 900;
+        canvas.height = 650;
+        canvas.dataset.view = viewName;
+        scene3d.canvas = canvas;
+        mountSvgInStage(mainStage, canvas);
+        activeViewLabel.textContent = formatViewLabel(viewName, view);
+        if (cachedModelData) {
+          mainDims.innerHTML = dimensionHtmlForView(viewName, cachedModelData, view);
+        }
+        drawScene3D(canvas, viewName);
+        resetViewTransforms();
+      }
+
+      function renderIsometricView() {
+        renderScene3DView("iso");
+      }
+
       function resolveDisplayedView(data, viewName) {
+        if (isCameraView(viewName)) {
+          return { ...VIEW_SPECS[viewName], view_name: viewName };
+        }
         const views = data.displayed_views ?? {};
         if (views[viewName]) {
           return views[viewName];
@@ -1557,6 +3147,11 @@
         const defaults = VIEW_SPECS[viewName];
         const labelFr = view.label_fr ?? defaults.labelFr;
         const labelEn = view.label_en ?? defaults.labelEn;
+        if (isCameraView(viewName)) {
+          const eye = view.camera_eye ?? defaults.cameraEye;
+          const look = view.view_axis ?? defaults.viewAxis;
+          return `${labelFr} (${labelEn}) — œil ${eye}, regard ${look} (repère Y-up)`;
+        }
         const plane = view.plane ?? defaults.plane;
         const viewAxis = view.view_axis ?? defaults.viewAxis;
         return `${labelFr} (${labelEn}) — plan ${plane}, selon ${viewAxis}`;
@@ -1567,8 +3162,10 @@
         const axes = view.dimension_axes ?? VIEW_SPECS[viewName].dimensionAxes;
         const axis = view.view_axis ?? VIEW_SPECS[viewName].viewAxis;
         let sizeLabel;
-        if (viewName === "top") {
+        if (viewName === "top" || viewName === "bottom") {
           sizeLabel = `${dx.toFixed(1)} × ${dz.toFixed(1)} mm`;
+        } else if (viewName === "iso") {
+          sizeLabel = `${dx.toFixed(1)} × ${dy.toFixed(1)} × ${dz.toFixed(1)} mm`;
         } else if (viewName === "side") {
           sizeLabel = `${Math.max(dx, dz).toFixed(1)} × ${dy.toFixed(1)} mm`;
         } else {
@@ -1582,20 +3179,21 @@
 
       function renderActiveView() {
         const viewName = currentViewName;
-        const svg = cachedViewSvgs[viewName];
-        const view = cachedViewMeta[viewName];
-        if (!svg || !view) {
+        const view = VIEW_SPECS[viewName];
+        if (!isCameraView(viewName) || !view) {
           showStagePlaceholder(mainStage, "Vue indisponible — réimportez le STEP");
           return;
         }
-        mountSvgInStage(mainStage, svg.cloneNode(true));
         activeViewLabel.textContent = formatViewLabel(viewName, view);
         if (cachedModelData) {
           mainDims.innerHTML = dimensionHtmlForView(viewName, cachedModelData, view);
         }
-        applyStoredOverlays();
-        applyLayerVisibility();
-        resetViewTransforms();
+        if (scene3d.canvas && scene3d.canvas.isConnected) {
+          scene3d.canvas.dataset.view = viewName;
+          drawScene3D(scene3d.canvas, viewName);
+          return;
+        }
+        renderScene3DView(viewName);
       }
 
       function switchView(viewName) {
@@ -1628,19 +3226,14 @@
         if (!metadataResponse.ok) throw new Error("Manifest de visualisation introuvable");
         const data = await metadataResponse.json();
 
-        const nextMeta = {};
-        const nextSvgs = {};
-        await Promise.all(
-          VIEW_ORDER.map(async (viewName) => {
-            const view = resolveDisplayedView(data, viewName);
-            nextMeta[viewName] = view;
-            nextSvgs[viewName] = await fetchSvg(viewName, view, baseUrl, signal);
-          }),
-        );
         if (sequence !== loadSequence) return;
 
+        const nextMeta = {};
+        for (const viewName of VIEW_ORDER) {
+          nextMeta[viewName] = { ...VIEW_SPECS[viewName], view_name: viewName };
+        }
         cachedViewMeta = nextMeta;
-        cachedViewSvgs = nextSvgs;
+        cachedViewSvgs = {};
         lastContactOverlayPayload = null;
         interiorContourOverlays = null;
         interiorContourStats = null;
@@ -1652,6 +3245,16 @@
         renderActiveView();
         activeModelLoaded = true;
         currentModelId = data.model_id;
+        loadViewerScene(data.model_id, signal)
+          .then(() => {
+            if (isCameraView(currentViewName)) redrawCameraView();
+          })
+          .catch((error) => {
+            console.error("[viewer:scene3d]", error);
+          });
+        stopRotationPlay();
+        clearRotationCache();
+        setRotationPrepProgress(null);
         currentMetadataUrl = metadataUrl;
         currentBaseUrl = baseUrl;
         history.replaceState(
@@ -1719,6 +3322,9 @@
               }
             }
           }
+        }
+        if (isCameraView(currentViewName) && scene3d.canvas) {
+          drawScene3D(scene3d.canvas, currentViewName);
         }
       }
 
@@ -2124,6 +3730,85 @@
       toolbarBuildScraper.addEventListener("click", () => {
         buildScraperOnly();
       });
+      toolbarScraperPanel?.addEventListener("click", toggleScraperPanel);
+      scraperRecalculateButton?.addEventListener("click", () => {
+        buildScraperOnly().catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      scraperShowToggle?.addEventListener("change", () => {
+        syncScraperVisibilityToggles(scraperShowToggle);
+      });
+      document
+        .querySelector('#sidebar-accordions [data-visibility-toggle="scraper"]')
+        ?.addEventListener("change", (event) => {
+          syncScraperVisibilityToggles(event.target);
+        });
+      document.getElementById("scraper-profile-a")?.addEventListener("click", () => {
+        applyScraperTestProfile("A");
+      });
+      document.getElementById("scraper-profile-b")?.addEventListener("click", () => {
+        applyScraperTestProfile("B");
+      });
+      document.getElementById("scraper-profile-c")?.addEventListener("click", () => {
+        applyScraperTestProfile("C");
+      });
+
+      document.getElementById("scraper-rotation-slider")?.addEventListener("input", (event) => {
+        stopRotationPlay();
+        // Slider value is a frame index, never a continuous angle.
+        showFrameAtIndex(Number(event.target.value), {
+          allowCompute: false,
+        }).catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      document.getElementById("scraper-rotation-slider")?.addEventListener("change", (event) => {
+        stopRotationPlay();
+        showFrameAtIndex(Number(event.target.value), {
+          allowCompute: !isPlayCacheComplete(),
+        }).catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      document.getElementById("scraper-step-minus")?.addEventListener("click", () => {
+        setRotationStepDeg(getRotationStepDeg() - 1);
+      });
+      document.getElementById("scraper-step-plus")?.addEventListener("click", () => {
+        setRotationStepDeg(getRotationStepDeg() + 1);
+      });
+      document.getElementById("scraper-rotation-reset")?.addEventListener("click", () => {
+        resetRotationAngle().catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      document.getElementById("scraper-rotation-play")?.addEventListener("click", () => {
+        startRotationPlay().catch((error) => {
+          stopRotationPlay();
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      document.getElementById("scraper-rotation-pause")?.addEventListener("click", () => {
+        stopRotationPlay();
+        setRotationPrepProgress(null);
+        setPlaybackStatus(
+          `Pause · Frame ${rotationFrameIndex + 1} / ${animationFrames().length}`,
+        );
+        setStatus("Rotation en pause", "ready");
+      });
+      for (const key of ROTATION_CACHE_PARAM_KEYS) {
+        const elementId = SCRAPER_FIELD_IDS[key];
+        if (!elementId) continue;
+        document.getElementById(elementId)?.addEventListener("change", () => {
+          stopRotationPlay();
+          ensureRotationCacheFingerprint();
+          updateRotationCacheStatus();
+        });
+      }
+      syncRotationStepControls();
+      syncFrameNavigator(0);
+      updateRotationCacheStatus();
+      setPlaybackStatus("—");
 
       async function initialize() {
         initializeAccordions();

@@ -11,20 +11,24 @@ import trimesh
 
 from nutella_scraper.engines.visualization.viewer_bridge import (
     build_contact_visualization_response,
+    build_viewer_scene_response,
     view_cache_from_viewer_dir,
 )
 
 
 @pytest.fixture
 def viewer_dir(tmp_path: Path, cylindrical_jar_canonical: object) -> Path:
-    from nutella_scraper.cad_import.model_store import ModelStore
     from scripts.visualization_helpers import VIEW_CONVENTIONS, build_projection_svg
-
     from tests.unit.cad_import.conftest import persist_test_cad_reference
+
+    from nutella_scraper.cad_import.model_store import ModelStore
 
     model = cylindrical_jar_canonical
     store = ModelStore(tmp_path / "models")
     store.persist(model)
+    canonical_stl = tmp_path / "models" / model.id / "canonical.stl"
+    visual_stl = tmp_path / "models" / model.id / ModelStore.VISUAL_STL
+    visual_stl.write_bytes(canonical_stl.read_bytes())
 
     jar_step = Path(__file__).resolve().parents[4] / "Solidworks" / "jar.STEP"
     if jar_step.exists():
@@ -84,7 +88,7 @@ class TestViewerBridge:
         cache = view_cache_from_viewer_dir(viewer_dir)
         assert cache.model_id == viewer_dir.name
         assert cache.profile_view.plane == "XY"
-        assert cache.top_view.plane == "XZ"
+        assert cache.top_view.plane == "X-Z"
 
     def test_build_contact_visualization_response(self, viewer_dir: Path) -> None:
         models_root = viewer_dir.parent.parent / "models"
@@ -96,3 +100,64 @@ class TestViewerBridge:
         )
         assert payload["model_id"] == viewer_dir.name
         assert "contact-covered" in payload["overlays"]["side"]
+
+    def test_viewer_scene_cameras_are_opposite(self, viewer_dir: Path) -> None:
+        models_root = viewer_dir.parent.parent / "models"
+        payload = build_viewer_scene_response(
+            view_dir=viewer_dir,
+            models_root=models_root,
+        )
+        top = np.asarray(payload["cameras"]["top"]["look_direction"], dtype=np.float64)
+        bottom = np.asarray(
+            payload["cameras"]["bottom"]["look_direction"], dtype=np.float64
+        )
+        np.testing.assert_allclose(top, -bottom, atol=1e-9)
+        assert payload["cameras"]["top"]["eye"] != payload["cameras"]["bottom"]["eye"]
+        assert payload["convention"]["vertical_axis"] == "Y"
+        assert payload["convention"]["opening"] == "+Y"
+        assert set(payload["cameras"]) == {
+            "top",
+            "bottom",
+            "side",
+            "left",
+            "right",
+            "iso",
+        }
+        assert payload["jar"]["source"] == "visual.stl"
+        assert len(payload["jar"]["vertices"]) > 0
+        assert len(payload["jar"]["edges"]) > 0
+        assert payload["jar"]["faces"]
+
+    def test_viewer_scene_jar_comes_from_visual_stl_not_canonical(
+        self, viewer_dir: Path
+    ) -> None:
+        from nutella_scraper.cad_import.model_store import ModelStore
+
+        models_root = viewer_dir.parent.parent / "models"
+        store = ModelStore(models_root)
+        canonical = store.get(viewer_dir.name)
+        lo = np.array(
+            [
+                canonical.bounds.min_x,
+                canonical.bounds.min_y,
+                canonical.bounds.min_z,
+            ]
+        )
+        hi = np.array(
+            [
+                canonical.bounds.max_x,
+                canonical.bounds.max_y,
+                canonical.bounds.max_z,
+            ]
+        )
+        box = trimesh.creation.box(extents=(hi - lo))
+        box.apply_translation(0.5 * (lo + hi))
+        box.export(str(store.get_visual_path(viewer_dir.name)))
+
+        payload = build_viewer_scene_response(
+            view_dir=viewer_dir,
+            models_root=models_root,
+        )
+        assert payload["jar"]["source"] == "visual.stl"
+        assert len(payload["jar"]["vertices"]) == len(box.vertices)
+        assert len(payload["jar"]["vertices"]) != len(canonical.mesh.vertices)

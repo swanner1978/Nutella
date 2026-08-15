@@ -15,24 +15,34 @@ VIEW_HEIGHT = 650
 VIEW_PADDING = 48
 
 # CAD orthographic conventions (visualization only), Y-up jar frame:
+# Opening = high +Y, base = low Y. Horizontal plane = XZ.
 # - profile (side): XY, look along ±Z
-# - top: XZ, look along ±Y
+# - top: X−Z, look from +Y toward −Y (into the opening)
+# - bottom: XZ, look from −Y toward +Y (from the base)
 # - left: ZY (Z×Y), look along +X
 # - right: -ZY (−Z×Y), look along −X
+ORTHOGRAPHIC_VIEW_NAMES: tuple[str, ...] = ("top", "bottom", "side", "left", "right")
 VIEW_CONVENTIONS: dict[str, dict[str, str]] = {
+    "top": {
+        "plane": "X-Z",
+        "view_axis": "Y",
+        "label_fr": "Vue de dessus",
+        "label_en": "Top View",
+        "dimension_axes": "X × Z",
+    },
+    "bottom": {
+        "plane": "XZ",
+        "view_axis": "-Y",
+        "label_fr": "Vue de dessous",
+        "label_en": "Bottom View",
+        "dimension_axes": "X × Z",
+    },
     "side": {
         "plane": "XY",
         "view_axis": "Z",
         "label_fr": "Vue de profil",
         "label_en": "Profile View",
         "dimension_axes": "X × Y",
-    },
-    "top": {
-        "plane": "XZ",
-        "view_axis": "Y",
-        "label_fr": "Vue de dessus",
-        "label_en": "Top View",
-        "dimension_axes": "X × Z",
     },
     "left": {
         "plane": "ZY",
@@ -60,6 +70,7 @@ class ProjectionLayers:
     vertices: str
     bounding_box: str
     principal_axes: str
+    coordinate_frame: str = ""
 
 
 def fit_to_viewport(
@@ -98,7 +109,7 @@ def fit_to_viewport(
 def projected_extent_mm(extents_mm: tuple[float, float, float], plane: str) -> tuple[float, float]:
     """Return the two world-axis spans visible in an orthographic projection."""
     dx, dy, dz = extents_mm
-    if plane == "XZ":
+    if plane in ("XZ", "X-Z"):
         return dx, dz
     if plane == "XY":
         return dx, dy
@@ -158,6 +169,8 @@ def build_cad_reference_projection_svg(
     )
     if plane == VIEW_CONVENTIONS["top"]["plane"]:
         view_axis_label = VIEW_CONVENTIONS["top"]["view_axis"]
+    elif plane == VIEW_CONVENTIONS["bottom"]["plane"]:
+        view_axis_label = VIEW_CONVENTIONS["bottom"]["view_axis"]
     elif plane == VIEW_CONVENTIONS["side"]["plane"]:
         view_axis_label = VIEW_CONVENTIONS["side"]["view_axis"]
     else:
@@ -229,17 +242,7 @@ def build_analytical_projection_svg(
         bounding_box=bounding_box,
         principal_axes=principal_axes_svg,
     )
-    view_axis_label = "Y"
-    if plane in ("XZ", "TOP_XZ"):
-        view_axis_label = "Y"
-    elif plane == "XY":
-        view_axis_label = "Z"
-    elif plane == VIEW_CONVENTIONS["side"]["plane"]:
-        view_axis_label = VIEW_CONVENTIONS["side"]["view_axis"]
-    elif plane == VIEW_CONVENTIONS["top"]["plane"]:
-        view_axis_label = VIEW_CONVENTIONS["top"]["view_axis"]
-    else:
-        raise ValueError(f"Unsupported projection plane: {plane}")
+    view_axis_label = _view_axis_label_for_plane(plane)
 
     return _projection_document(
         layers,
@@ -296,6 +299,13 @@ def build_projection_svg(
             offset=offset,
             flip_u=(plane == "-ZY"),
         ),
+        coordinate_frame=_coordinate_frame_svg(
+            center=np.asarray(center, dtype=np.float64),
+            half_span_mm=_frame_half_span_mm(mesh.extents),
+            plane=plane,
+            scale=scale,
+            offset=offset,
+        ),
     )
     view_axis_label = _view_axis_label_for_plane(plane)
 
@@ -309,8 +319,10 @@ def build_projection_svg(
 
 
 def _view_axis_label_for_plane(plane: str) -> str:
-    if plane in ("XZ", "TOP_XZ"):
+    if plane in ("X-Z", "TOP_XZ"):
         return "Y"
+    if plane == "XZ":
+        return "-Y"
     if plane == "XY":
         return "Z"
     if plane == "ZY":
@@ -332,10 +344,19 @@ def _project_vertices(
 
     Returns coords, component_indices, view_axis_index, facing_positive.
     """
-    if plane in ("XZ", "TOP_XZ"):
+    if plane in ("X-Z", "TOP_XZ"):
+        # True top: from +Y, U=+X, V=−Z ( +Z toward bottom of SVG ).
         indices = (0, 2)
         view_axis = 1
         facing_positive = True
+        coords = vertices[:, indices].astype(np.float64, copy=True)
+        coords[:, 1] *= -1.0
+        return coords, indices, view_axis, facing_positive
+    if plane == "XZ":
+        # Bottom: from −Y, U=+X, V=+Z (legacy mapping previously labelled Top).
+        indices = (0, 2)
+        view_axis = 1
+        facing_positive = False
         coords = vertices[:, indices]
     elif plane == "XY":
         indices = (0, 1)
@@ -463,6 +484,157 @@ def _principal_axes_svg(
     return "".join(fragments)
 
 
+FRAME_TICK_MM = 10.0
+_FRAME_AXES: tuple[tuple[str, tuple[float, float, float], str], ...] = (
+    ("X", (1.0, 0.0, 0.0), "#ff5252"),
+    ("Y", (0.0, 1.0, 0.0), "#66ff66"),
+    ("Z", (0.0, 0.0, 1.0), "#4d8dff"),
+)
+
+
+def _frame_half_span_mm(extents: np.ndarray | tuple[float, float, float]) -> float:
+    """Axis half-length in mm, snapped to 10 mm ticks (at least ±20 mm)."""
+    half = float(np.max(np.asarray(extents, dtype=np.float64)) / 2.0)
+    snapped = float(np.ceil(half / FRAME_TICK_MM) * FRAME_TICK_MM)
+    return max(snapped, 20.0)
+
+
+def _world_points_to_svg(
+    points_mm: np.ndarray,
+    *,
+    plane: str,
+    scale: np.ndarray | float,
+    offset: np.ndarray,
+) -> np.ndarray:
+    """Project world mm points with the same plane + viewport transform as the mesh."""
+    coords, _, _, _ = _project_vertices(np.asarray(points_mm, dtype=np.float64), plane)
+    return coords * scale + offset
+
+
+def _arrow_head_svg(
+    start: np.ndarray,
+    end: np.ndarray,
+    *,
+    color: str,
+) -> str:
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if length < 1e-6:
+        return ""
+    unit = direction / length
+    normal = np.array([-unit[1], unit[0]], dtype=np.float64)
+    tip = end
+    base = end - unit * 9.0
+    left = base + normal * 4.0
+    right = base - normal * 4.0
+    return (
+        f'<polygon class="frame-arrow" fill="{color}" '
+        f'points="{tip[0]:.2f},{tip[1]:.2f} {left[0]:.2f},{left[1]:.2f} '
+        f'{right[0]:.2f},{right[1]:.2f}"/>'
+    )
+
+
+def _coordinate_frame_svg(
+    *,
+    center: np.ndarray,
+    half_span_mm: float,
+    plane: str,
+    scale: np.ndarray | float,
+    offset: np.ndarray,
+) -> str:
+    """
+    Draw canonical XYZ axes at the geometric center, with 10 mm ticks.
+
+    Uses the same orthographic plane and fit_to_viewport transform as the mesh.
+    Tick labels are local offsets from the center (O = local 0,0,0).
+    """
+    center = np.asarray(center, dtype=np.float64).reshape(3)
+    origin_svg = _world_points_to_svg(center.reshape(1, 3), plane=plane, scale=scale, offset=offset)[
+        0
+    ]
+    parts: list[str] = [
+        (
+            f'<circle class="frame-origin" data-frame-origin="1" '
+            f'cx="{origin_svg[0]:.2f}" cy="{origin_svg[1]:.2f}" r="3.2"/>'
+        ),
+        (
+            f'<text class="frame-label" data-frame-origin-label="1" '
+            f'x="{origin_svg[0] + 7:.2f}" y="{origin_svg[1] - 7:.2f}">'
+            f"O (0, 0, 0)</text>"
+        ),
+        (
+            f'<text class="frame-label" data-frame-unit="1" '
+            f'x="{origin_svg[0] + 7:.2f}" y="{origin_svg[1] + 12:.2f}">'
+            f"mm · centre "
+            f"({center[0]:.1f}, {center[1]:.1f}, {center[2]:.1f})</text>"
+        ),
+    ]
+
+    tick_count = int(half_span_mm // FRAME_TICK_MM)
+    for axis_name, direction, color in _FRAME_AXES:
+        direction_arr = np.asarray(direction, dtype=np.float64)
+        neg = center - direction_arr * half_span_mm
+        pos = center + direction_arr * half_span_mm
+        ends_svg = _world_points_to_svg(
+            np.vstack([neg, pos]),
+            plane=plane,
+            scale=scale,
+            offset=offset,
+        )
+        span = float(np.linalg.norm(ends_svg[1] - ends_svg[0]))
+        if span < 3.0:
+            # View-aligned axis: mark depth at the origin.
+            parts.append(
+                f'<text class="frame-label" data-frame-depth="{axis_name}" '
+                f'x="{origin_svg[0] - 28:.2f}" y="{origin_svg[1] + 22:.2f}" '
+                f'fill="{color}">{axis_name} ⊙ profondeur</text>'
+            )
+            continue
+
+        parts.append(
+            f'<line class="frame-axis" data-frame-axis="{axis_name}" '
+            f'x1="{ends_svg[0, 0]:.2f}" y1="{ends_svg[0, 1]:.2f}" '
+            f'x2="{ends_svg[1, 0]:.2f}" y2="{ends_svg[1, 1]:.2f}" '
+            f'stroke="{color}"/>'
+        )
+        parts.append(_arrow_head_svg(ends_svg[0], ends_svg[1], color=color))
+        label_pos = ends_svg[1] + (ends_svg[1] - ends_svg[0]) / span * 12.0
+        parts.append(
+            f'<text class="frame-label" data-frame-axis-label="{axis_name}" '
+            f'x="{label_pos[0]:.2f}" y="{label_pos[1]:.2f}" fill="{color}">'
+            f"{axis_name}</text>"
+        )
+
+        axis_dir_svg = (ends_svg[1] - ends_svg[0]) / span
+        tick_normal = np.array([-axis_dir_svg[1], axis_dir_svg[0]], dtype=np.float64)
+        for step in range(-tick_count, tick_count + 1):
+            if step == 0:
+                continue
+            tick_world = center + direction_arr * (step * FRAME_TICK_MM)
+            tick_svg = _world_points_to_svg(
+                tick_world.reshape(1, 3),
+                plane=plane,
+                scale=scale,
+                offset=offset,
+            )[0]
+            a = tick_svg - tick_normal * 4.0
+            b = tick_svg + tick_normal * 4.0
+            parts.append(
+                f'<line class="frame-tick" data-frame-tick="{axis_name}:{step * int(FRAME_TICK_MM)}" '
+                f'x1="{a[0]:.2f}" y1="{a[1]:.2f}" x2="{b[0]:.2f}" y2="{b[1]:.2f}" '
+                f'stroke="{color}"/>'
+            )
+            label_offset = tick_normal * 10.0
+            parts.append(
+                f'<text class="frame-label" data-frame-tick-label="{axis_name}:{step * int(FRAME_TICK_MM)}" '
+                f'x="{tick_svg[0] + label_offset[0]:.2f}" '
+                f'y="{tick_svg[1] + label_offset[1]:.2f}" fill="{color}">'
+                f"{step * int(FRAME_TICK_MM):+d}</text>"
+            )
+
+    return "".join(parts)
+
+
 def _projection_document(
     layers: ProjectionLayers,
     *,
@@ -491,12 +663,18 @@ def _projection_document(
         ".bounding-box{fill:none;stroke:#ffb74d;stroke-width:1.5;stroke-dasharray:7 5;"
         "vector-effect:non-scaling-stroke}"
         ".principal-axis{stroke-width:2;vector-effect:non-scaling-stroke}"
+        ".frame-axis{stroke-width:1.6;vector-effect:non-scaling-stroke}"
+        ".frame-tick{stroke-width:1;vector-effect:non-scaling-stroke;opacity:.85}"
+        ".frame-origin{fill:#fff;stroke:#111;stroke-width:1;vector-effect:non-scaling-stroke}"
+        ".frame-label{fill:#c8c8c8;font:10px ui-monospace,Consolas,monospace}"
+        ".frame-arrow{stroke:none}"
         "</style>"
         '<rect width="100%" height="100%" fill="#000"/>'
         f'<g data-layer="wireframe" style="display:none">{layers.wireframe}</g>'
         f'<g data-layer="vertices" style="display:none">{layers.vertices}</g>'
         f'<g data-layer="bounding-box" style="display:none">{layers.bounding_box}</g>'
         f'<g data-layer="principal-axes" style="display:none">{layers.principal_axes}</g>'
+        f'<g data-layer="coordinate-frame">{layers.coordinate_frame}</g>'
         f'<g data-layer="contour">{layers.contour}</g>'
         "</svg>"
     )

@@ -9,7 +9,6 @@ from numpy.typing import NDArray
 
 from nutella_scraper.cad_import.brep_contour_extractor import (
     PLANE_PROFILE,
-    PLANE_TOP_XZ,
     offset_contour,
 )
 from nutella_scraper.domain.models.cad_reference_geometry import CadReferenceGeometry
@@ -19,7 +18,7 @@ from nutella_scraper.engines.visualization.cad_reference_projector import (
     LAYER_INTERIOR_PROFILE,
     contour_layers_for_plane,
 )
-from nutella_scraper.engines.visualization.projection_math import project_vertices
+from nutella_scraper.engines.visualization.projection_math import PLANE_TOP, project_vertices
 
 LAYER_ENVELOPE = LAYER_INTERIOR_PROFILE
 
@@ -79,17 +78,19 @@ class EnvelopeProjector:
         top_ref: NDArray[np.float64] | None = None
         if jar_vertices is not None and len(jar_vertices) > 0:
             profile_ref, _, _ = project_vertices(jar_vertices, PLANE_PROFILE)
-            top_ref, _, _ = project_vertices(jar_vertices, PLANE_TOP_XZ)
+            top_ref, _, _ = project_vertices(jar_vertices, PLANE_TOP)
 
         return EnvelopeProjection(
             profile_layers=contour_layers_for_plane(
                 profile,
                 view_key="profile",
                 reference_coords=profile_ref,
+                view_plane=PLANE_PROFILE,
             ),
             top_layers=contour_layers_for_plane(
                 top,
                 view_key="top",
                 reference_coords=top_ref,
+                view_plane=PLANE_TOP,
             ),
         )

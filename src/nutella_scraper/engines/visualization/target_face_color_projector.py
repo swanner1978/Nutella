@@ -15,6 +15,7 @@ from nutella_scraper.engines.visualization.cad_reference_projector import (
     LAYER_INTERIOR_PROFILE,
 )
 from nutella_scraper.engines.visualization.projection_math import (
+    PLANE_BOTTOM,
     PLANE_LEFT,
     PLANE_RIGHT,
     PLANE_SIDE,
@@ -32,6 +33,7 @@ class TargetFaceColorProjection:
     top_layers: tuple[SvgLayer, ...]
     left_layers: tuple[SvgLayer, ...]
     right_layers: tuple[SvgLayer, ...]
+    bottom_layers: tuple[SvgLayer, ...] = ()
 
 
 class TargetFaceColorProjector:
@@ -115,6 +117,18 @@ class TargetFaceColorProjector:
                 layer_type=layer_type,
                 include_labels=include_labels,
             ),
+            bottom_layers=self._layers_for_plane(
+                vertices=vertices,
+                faces=faces,
+                jar_vertices=jar,
+                plane=PLANE_BOTTOM,
+                view_key="bottom",
+                target_face_count=target_face_count,
+                target_area_mm2=target_area_mm2,
+                fill_rgb_255=fill_rgb_255,
+                layer_type=layer_type,
+                include_labels=include_labels,
+            ),
         )
 
     def _empty_layers(
@@ -126,6 +140,7 @@ class TargetFaceColorProjector:
         layer_type: str,
         include_labels: bool,
     ) -> tuple[
+        tuple[SvgLayer, ...],
         tuple[SvgLayer, ...],
         tuple[SvgLayer, ...],
         tuple[SvgLayer, ...],
@@ -149,9 +164,15 @@ class TargetFaceColorProjector:
                 if fragment
                 else ()
             )
-            for key in ("profile", "top", "left", "right")
+            for key in ("profile", "top", "left", "right", "bottom")
         }
-        return layers["profile"], layers["top"], layers["left"], layers["right"]
+        return (
+            layers["profile"],
+            layers["top"],
+            layers["left"],
+            layers["right"],
+            layers["bottom"],
+        )
 
     @staticmethod
     def _layers_for_plane(

@@ -10,11 +10,16 @@ import pytest
 pytest.importorskip("OCP")
 
 from nutella_scraper.cad_import import GeometryNormalizer, ImportPipeline, ModelStore
-from nutella_scraper.cad_import.brep_contour_extractor import PLANE_PROFILE, PLANE_TOP_XZ
+from nutella_scraper.cad_import.brep_contour_extractor import PLANE_TOP_XZ
 from nutella_scraper.cad_import.cad_reference_builder import CadReferenceGeometryBuilder
 from nutella_scraper.cad_import.trimesh_loader import TrimeshLoader
 from nutella_scraper.engines.visualization.cad_reference_projector import contour_to_svg_fragment
-from nutella_scraper.engines.visualization.projection_math import fit_to_viewport, project_vertices
+from nutella_scraper.engines.visualization.projection_math import (
+    PLANE_TOP,
+    fit_to_viewport,
+    project_vertices,
+    xz_contour_to_view_coords,
+)
 from scripts.visualization_helpers import VIEW_CONVENTIONS
 
 
@@ -31,7 +36,8 @@ def test_interior_contours_use_same_planes_as_mesh_views(jar_step_path: Path) ->
     assert geometry.profile_contour is not None
     assert geometry.top_contour is not None
     assert geometry.profile_contour.plane == VIEW_CONVENTIONS["side"]["plane"] == "XY"
-    assert geometry.top_contour.plane == VIEW_CONVENTIONS["top"]["plane"] == "XZ"
+    assert geometry.top_contour.plane == PLANE_TOP_XZ == "XZ"
+    assert VIEW_CONVENTIONS["top"]["plane"] == "X-Z"
     assert geometry.profile_contour.source == "opencascade_brep_section_xy"
     assert geometry.top_contour.source == "opencascade_brep_rim_xz"
 
@@ -53,19 +59,26 @@ def test_interior_contour_svg_matches_mesh_viewport_transform(
     geometry = CadReferenceGeometryBuilder().from_step(jar_step_path, model_id=model.id)
     jar_vertices = np.asarray(model.mesh.vertices, dtype=np.float64)
 
-    for contour, plane in (
-        (geometry.profile_contour, PLANE_PROFILE),
-        (geometry.top_contour, PLANE_TOP_XZ),
+    for contour, view_plane in (
+        (geometry.profile_contour, "XY"),
+        (geometry.top_contour, PLANE_TOP),
     ):
         assert contour is not None
         assert len(contour.polylines) >= 1
         polyline = max(contour.polylines, key=lambda item: len(item.points_mm))
         points = np.asarray(polyline.points_mm, dtype=np.float64)
-        jar_coords, _, _ = project_vertices(jar_vertices, plane)
+        jar_coords, _, _ = project_vertices(jar_vertices, view_plane)
         scale, offset = fit_to_viewport(jar_coords)
-        expected = points * scale + offset
+        view_points = (
+            xz_contour_to_view_coords(points, view_plane)
+            if view_plane == PLANE_TOP
+            else points
+        )
+        expected = view_points * scale + offset
 
-        fragment = contour_to_svg_fragment(contour, reference_coords=jar_coords)
+        fragment = contour_to_svg_fragment(
+            contour, reference_coords=jar_coords, view_plane=view_plane
+        )
         assert fragment
         # Parse first path's M/L coordinates and compare to expected transform.
         path_start = fragment.index('d="') + 3
@@ -82,8 +95,8 @@ def test_interior_contour_svg_matches_mesh_viewport_transform(
         assert float(np.max(np.abs(delta))) <= 0.02
 
         # Must NOT be fitted on the contour bbox alone (that was the old bug).
-        own_scale, own_offset = fit_to_viewport(points)
-        own_projected = points * own_scale + own_offset
+        own_scale, own_offset = fit_to_viewport(view_points)
+        own_projected = view_points * own_scale + own_offset
         # For a rim/section smaller than the full jar, own fit differs from jar fit.
         assert float(np.max(np.abs(own_projected - expected))) > 1.0
 

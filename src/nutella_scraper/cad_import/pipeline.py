@@ -97,6 +97,7 @@ class ImportPipeline:
         assert isinstance(canonical, CanonicalModel3D)
         model_id = self._model_store.persist(canonical)
         self._persist_cad_reference_if_step(canonical, model_id)
+        self._persist_visual_stl_if_step(canonical, model_id)
 
         views_id: str | None = None
         if generate_views:
@@ -138,3 +139,29 @@ class ImportPipeline:
             )
         except Exception as exc:
             _LOG.warning("[cad_reference] failed for model=%s: %s", model_id, exc)
+
+    def _persist_visual_stl_if_step(self, canonical: object, model_id: str) -> None:
+        from nutella_scraper.domain.models.canonical import CanonicalModel3D
+
+        assert isinstance(canonical, CanonicalModel3D)
+        if canonical.format != "step":
+            return
+        step_path = canonical.source_path
+        stored_step = self._model_store.reference_step_path(model_id)
+        if stored_step.exists():
+            step_path = stored_step
+        if not step_path.exists():
+            _LOG.warning("[visual.stl] skipped model=%s: STEP source missing", model_id)
+            return
+        payload = self._model_store.persist_visual(
+            model_id,
+            step_path=step_path,
+            canonical=canonical,
+        )
+        _LOG.info(
+            "[visual.stl] persisted model=%s | vertices=%s | faces=%s | max_frame_delta_mm=%.4f",
+            model_id,
+            payload.get("vertex_count"),
+            payload.get("face_count"),
+            float(payload["frame_check"]["max_frame_delta_mm"]),  # type: ignore[index]
+        )

@@ -13,9 +13,12 @@ VIEW_PADDING = 48
 
 PLANE_PROFILE = "PROFILE"
 PLANE_TOP_XZ = "TOP_XZ"
-# Mesh overlay planes for Y-up jar (must match VIEW_CONVENTIONS)
+# Mesh overlay planes for Y-up jar (must match VIEW_CONVENTIONS).
+# Top looks from +Y (opening) with U=+X, V=−Z so +Z is toward the bottom of
+# the SVG — right-handed camera looking −Y. Bottom is the opposite chirality.
 PLANE_SIDE = "XY"
-PLANE_TOP = "XZ"
+PLANE_TOP = "X-Z"
+PLANE_BOTTOM = "XZ"
 PLANE_LEFT = "ZY"
 PLANE_RIGHT = "-ZY"
 
@@ -25,7 +28,14 @@ def project_vertices(
     plane: str,
 ) -> tuple[NDArray[np.float64], tuple[int, int], int]:
     """Project 3D vertices onto a 2D plane (same convention as the CAD viewer)."""
-    if plane in ("XZ", PLANE_TOP_XZ):
+    if plane in ("X-Z", PLANE_TOP_XZ):
+        # True top: camera at +Y looking toward −Y. U=+X, V=−Z.
+        indices = (0, 2)
+        view_axis = 1
+        coords = vertices[:, indices].astype(np.float64, copy=True)
+        coords[:, 1] *= -1.0
+    elif plane == "XZ":
+        # Bottom: camera at −Y looking toward +Y. U=+X, V=+Z.
         indices = (0, 2)
         view_axis = 1
         coords = vertices[:, indices].astype(np.float64, copy=False)
@@ -47,6 +57,21 @@ def project_vertices(
     else:
         raise ValueError(f"Unsupported projection plane: {plane}")
     return coords, indices, view_axis
+
+
+def xz_contour_to_view_coords(
+    points_xz: NDArray[np.float64],
+    view_plane: str,
+) -> NDArray[np.float64]:
+    """Map stored XZ contour points into a top/bottom view 2D frame."""
+    points = np.asarray(points_xz, dtype=np.float64)
+    if points.size == 0:
+        return points.reshape(0, 2)
+    lifted = np.column_stack(
+        [points[:, 0], np.zeros(len(points), dtype=np.float64), points[:, 1]]
+    )
+    coords, _, _ = project_vertices(lifted, view_plane)
+    return coords
 
 
 def fit_to_viewport(

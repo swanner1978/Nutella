@@ -19,7 +19,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock, Thread
 from typing import Any
-from urllib.parse import unquote, urlencode, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
 MAX_STEP_UPLOAD_BYTES = 250 * 1024 * 1024
 UPLOAD_CHUNK_BYTES = 1024 * 1024
@@ -47,15 +47,17 @@ from scripts.viewer_api import (  # noqa: E402
     API_RUNTIME,
     API_SIMULATE_CONTACT,
     API_SIMULATIONS,
+    API_VIEWER_SCENE,
     build_not_found_payload,
     normalize_api_path,
-    resolve_view_dir,
     resolve_pose_view_dir,
+    resolve_view_dir,
     simulation_id_from_path,
     simulation_pose_path,
     simulation_result_id_from_path,
 )
 from scripts.viewer_handlers import (  # noqa: E402
+    read_build_scraper_request,
     read_simulate_contact_request,
     read_viewer_model_request,
 )
@@ -73,6 +75,7 @@ from nutella_scraper.engines.visualization.viewer_bridge import (  # noqa: E402
     build_debug_step_face_colors_response,
     build_interior_contour_response,
     build_scraper_visualization_response,
+    build_viewer_scene_response,
 )
 
 _LOG = logging.getLogger("nutella_scraper.serve_viewer")
@@ -125,6 +128,17 @@ def _log_step(request_id: str, stage: str, message: str, **fields: object) -> No
     _LOG.info("[upload:%s] [%s] %s%s", request_id, stage, message, detail)
 
 
+def viewer_document_path(request_path: str) -> str:
+    """Map launch aliases to the real viewer document.
+
+    The file on disk is always ``index.html``. Some clients request ``/index``
+    (no extension); that must not 404 as a missing file named ``index``.
+    """
+    if request_path in ("", "/", "/index"):
+        return "/index.html"
+    return request_path
+
+
 class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
     """Serve static files; redirect directory root to index.html."""
 
@@ -135,6 +149,9 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         request_path = urlsplit(self.path).path
+        if normalize_api_path(request_path) == API_VIEWER_SCENE:
+            self._handle_viewer_scene()
+            return
         if normalize_api_path(request_path) == API_RUNTIME:
             self._send_json(
                 200,
@@ -157,9 +174,29 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
         if simulation_id is not None:
             self._handle_simulation_status(simulation_id)
             return
-        if request_path in ("", "/"):
-            self.path = "/index.html"
-            request_path = self.path
+        parsed = urlsplit(self.path)
+        if parsed.path == "/index":
+            query = f"?{parsed.query}" if parsed.query else ""
+            self.send_response(302)
+            self.send_header("Location", f"/index.html{query}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        request_path = viewer_document_path(parsed.path)
+        if request_path == "/index.html" and parsed.path != "/index.html":
+            self.path = "/index.html" + (f"?{parsed.query}" if parsed.query else "")
+
+        if request_path.endswith("/metadata.json"):
+            translated_meta = Path(self.translate_path(request_path))
+            if translated_meta.is_file():
+                try:
+                    from scripts.demo_import import refresh_orthographic_views
+
+                    refresh_orthographic_views(
+                        translated_meta.parent, self.server.models_root
+                    )
+                except Exception:
+                    _LOG.exception("[http] refresh_orthographic_views failed")
 
         translated = Path(self.translate_path(request_path))
         if translated.is_file():
@@ -331,6 +368,43 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
             status = 422 if isinstance(exc, ValueError) else 500
             self._send_error_json(status, exc, request_id=request_id, stage=stage)
 
+    def _handle_viewer_scene(self) -> None:
+        request_id = str(uuid.uuid4())
+        stage = "viewer_scene"
+        try:
+            query = parse_qs(urlsplit(self.path).query)
+            raw_model_id = query.get("model_id", [None])[0]
+            model_id = str(raw_model_id) if raw_model_id else None
+            view_dir = resolve_view_dir(
+                output_root=self.server.output_root,
+                active_view_dir=self.server.active_view_dir,
+                model_id=model_id,
+            )
+            _log_step(
+                request_id,
+                stage,
+                "GET /api/viewer-scene",
+                view_dir=str(view_dir),
+                model_id=model_id or view_dir.name,
+            )
+            payload = build_viewer_scene_response(
+                view_dir=view_dir,
+                models_root=self.server.models_root,
+            )
+            self._send_json(200, payload)
+        except Exception as exc:
+            _LOG.exception(
+                "[viewer-scene:%s] [%s] échec: %s: %s",
+                request_id,
+                stage,
+                exc.__class__.__name__,
+                exc,
+            )
+            status = 404 if isinstance(exc, FileNotFoundError) else 500
+            if isinstance(exc, ValueError):
+                status = 422
+            self._send_error_json(status, exc, request_id=request_id, stage=stage)
+
     def _handle_simulate_contact(self, request_id: str) -> None:
         stage = "start_simulation"
         try:
@@ -378,7 +452,7 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
         try:
             content_length = self._parse_content_length()
             raw_body = self.rfile.read(content_length) if content_length > 0 else b""
-            request = read_viewer_model_request(raw_body)
+            request = read_build_scraper_request(raw_body)
             view_dir = resolve_view_dir(
                 output_root=self.server.output_root,
                 active_view_dir=self.server.active_view_dir,
@@ -394,6 +468,7 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
             payload = build_scraper_visualization_response(
                 view_dir=view_dir,
                 models_root=self.server.models_root,
+                parameters=request.parameters,
             )
             self._send_json(200, payload)
         except Exception as exc:
@@ -697,7 +772,26 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
                 exc.__class__.__name__,
             )
 
+    def guess_type(self, path: str) -> str:
+        """Keep viewer HTML inline in the browser (never octet-stream)."""
+        suffix = Path(path.replace("\\", "/")).suffix.lower()
+        if suffix in {".html", ".htm"}:
+            return "text/html; charset=utf-8"
+        if suffix == ".css":
+            return "text/css; charset=utf-8"
+        if suffix in {".js", ".mjs"}:
+            return "text/javascript; charset=utf-8"
+        if suffix == ".svg":
+            return "image/svg+xml"
+        if suffix == ".json":
+            return "application/json; charset=utf-8"
+        return super().guess_type(path)
+
     def end_headers(self) -> None:
+        request_path = urlsplit(self.path).path.lower()
+        if request_path.endswith(".html") or request_path.endswith(".htm"):
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")

@@ -11,6 +11,7 @@ from nutella_scraper.domain.models.internal_jar_surface import InternalJarSurfac
 from nutella_scraper.domain.models.views import SvgLayer
 from nutella_scraper.engines.compute.internal_jar_surface_builder import internal_mesh_to_trimesh
 from nutella_scraper.engines.visualization.projection_math import (
+    PLANE_BOTTOM,
     PLANE_LEFT,
     PLANE_RIGHT,
     PLANE_SIDE,
@@ -30,6 +31,7 @@ class TrajectoryProjection:
     top_layers: tuple[SvgLayer, ...]
     left_layers: tuple[SvgLayer, ...] = ()
     right_layers: tuple[SvgLayer, ...] = ()
+    bottom_layers: tuple[SvgLayer, ...] = ()
 
 
 class TrajectoryProjector:
@@ -69,6 +71,12 @@ class TrajectoryProjector:
                 jar_vertices=jar_vertices,
                 plane=PLANE_RIGHT,
                 view_key="right",
+            ),
+            bottom_layers=self._layers_for_plane(
+                points=points,
+                jar_vertices=jar_vertices,
+                plane=PLANE_BOTTOM,
+                view_key="bottom",
             ),
         )
 

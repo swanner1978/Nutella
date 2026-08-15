@@ -56,6 +56,48 @@ def test_profile_left_right_opening_is_above_base_in_svg() -> None:
         assert rim_svg[1] < base_svg[1], f"{view_name}: opening must be above base"
 
 
+def test_top_view_looks_from_plus_y_with_plus_z_toward_screen_bottom() -> None:
+    """True top: camera at +Y, +X to the right, +Z toward the bottom of the SVG."""
+    vertices = np.array(
+        [
+            [10.0, 80.0, 0.0],
+            [-10.0, 80.0, 0.0],
+            [0.0, 80.0, 12.0],
+            [0.0, 80.0, -12.0],
+            [0.0, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    coords, _, _ = project_vertices(vertices, VIEW_CONVENTIONS["top"]["plane"])
+    scale, offset = fit_to_viewport(coords)
+    svg = coords * scale + offset
+    plus_x, minus_x, plus_z, minus_z, _origin = svg
+    assert plus_x[0] > minus_x[0]
+    assert plus_z[1] > minus_z[1]
+
+
+def test_bottom_view_is_opposite_chirality_of_top() -> None:
+    vertices = np.array(
+        [
+            [10.0, 0.0, 0.0],
+            [-10.0, 0.0, 0.0],
+            [0.0, 0.0, 12.0],
+            [0.0, 0.0, -12.0],
+        ],
+        dtype=np.float64,
+    )
+    top_coords, _, _ = project_vertices(vertices, VIEW_CONVENTIONS["top"]["plane"])
+    bottom_coords, _, _ = project_vertices(vertices, VIEW_CONVENTIONS["bottom"]["plane"])
+    scale_t, offset_t = fit_to_viewport(top_coords)
+    scale_b, offset_b = fit_to_viewport(bottom_coords)
+    top_svg = top_coords * scale_t + offset_t
+    bottom_svg = bottom_coords * scale_b + offset_b
+    assert top_svg[0, 0] > top_svg[1, 0]
+    assert bottom_svg[0, 0] > bottom_svg[1, 0]
+    assert top_svg[2, 1] > top_svg[3, 1]
+    assert bottom_svg[2, 1] < bottom_svg[3, 1]
+
+
 def test_orientation_does_not_mutate_input_coordinates() -> None:
     coords = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
     original = coords.copy()

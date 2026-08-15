@@ -78,9 +78,13 @@ def test_projection_contains_one_canonical_model_and_toggleable_layers() -> None
 
         "principal-axes",
 
+        "coordinate-frame",
+
     }
 
     assert "display:none" not in layers["contour"].attrib.get("style", "")
+
+    assert "display:none" not in layers["coordinate-frame"].attrib.get("style", "")
 
     for name in ("wireframe", "vertices", "bounding-box", "principal-axes"):
 
@@ -142,7 +146,7 @@ def test_mesh_projections_use_world_planes_and_extents() -> None:
 
     assert side_root.attrib["data-plane"] == "XZ"
 
-    assert side_root.attrib["data-view-axis"] == "Y"
+    assert side_root.attrib["data-view-axis"] == "-Y"
 
     assert top_root.attrib["data-plane"] == "XY"
 
@@ -236,7 +240,7 @@ def test_displayed_view_entry_documents_side_and_top_conventions() -> None:
 
     assert side["label_en"] == "Profile View"
 
-    assert top["plane"] == VIEW_CONVENTIONS["top"]["plane"] == "XZ"
+    assert top["plane"] == VIEW_CONVENTIONS["top"]["plane"] == "X-Z"
 
     assert top["view_axis"] == "Y"
 
@@ -249,6 +253,7 @@ def test_displayed_view_entry_documents_side_and_top_conventions() -> None:
 def test_analytical_view_extents_use_profile_and_top_planes() -> None:
 
     assert projected_extent_mm((10.0, 20.0, 30.0), "XZ") == (10.0, 30.0)
+    assert projected_extent_mm((10.0, 20.0, 30.0), "X-Z") == (10.0, 30.0)
 
     assert projected_extent_mm((10.0, 20.0, 30.0), "XY") == (10.0, 20.0)
 

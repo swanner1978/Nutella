@@ -203,7 +203,7 @@ def _save_views(
 
     _LOG.info("[visualization] external_overlay=none")
     displayed_views: dict[str, dict[str, str]] = {}
-    for view_name in ("side", "top", "left", "right"):
+    for view_name in ("side", "top", "left", "right", "bottom"):
         svg = build_projection_svg(
             mesh,
             plane=VIEW_CONVENTIONS[view_name]["plane"],
@@ -247,6 +247,46 @@ def _save_views(
     _LOG.info("[viewer] file=%s | sha256=%s", html_path, _file_sha256(html_path))
     _LOG.info("[manifest] file=%s | sha256=%s", meta_path, _file_sha256(meta_path))
     return run_dir
+
+
+def refresh_orthographic_views(view_dir: Path, models_root: Path) -> None:
+    """Rewrite SVG views when Top/Bottom conventions change (visualization only)."""
+    from nutella_scraper.cad_import.model_store import ModelStore
+    from scripts.visualization_helpers import VIEW_CONVENTIONS, build_projection_svg
+
+    meta_path = view_dir / "metadata.json"
+    if not meta_path.exists():
+        return
+    metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+    views = metadata.get("displayed_views") or {}
+    top = views.get("top") or {}
+    if "bottom" in views and top.get("plane") == VIEW_CONVENTIONS["top"]["plane"]:
+        return
+    model_id = str(metadata["model_id"])
+    canonical_hash = str(metadata["canonical_mesh_sha256"])
+    model = ModelStore(models_root).get(model_id)
+    mesh = _canonical_trimesh(model)
+    displayed_views: dict[str, dict[str, str]] = {}
+    for view_name in ("side", "top", "left", "right", "bottom"):
+        svg = build_projection_svg(
+            mesh,
+            plane=VIEW_CONVENTIONS[view_name]["plane"],
+            center=model.geometry.center_mm,
+            principal_axes=model.geometry.principal_axes,
+            model_id=model.id,
+            canonical_mesh_sha256=canonical_hash,
+        )
+        filename = f"{view_name}_composite.svg"
+        path = view_dir / filename
+        path.write_text(svg, encoding="utf-8")
+        displayed_views[view_name] = displayed_view_entry(
+            view_name=view_name,
+            filename=filename,
+            sha256=_file_sha256(path),
+            canonical_mesh_sha256=canonical_hash,
+        )
+    metadata["displayed_views"] = displayed_views
+    meta_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
 
 def _serve_directory(directory: Path, port: int) -> None:

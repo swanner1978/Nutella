@@ -15,6 +15,7 @@ API_INTERIOR_CONTOUR = "/api/interior-contour"
 API_DEBUG_STEP_FACE_COLORS = "/api/debug-step-face-colors"
 API_SIMULATIONS = "/api/simulations"
 API_RUNTIME = "/api/runtime"
+API_VIEWER_SCENE = "/api/viewer-scene"
 
 VIEWER_POST_ENDPOINTS: tuple[str, ...] = (
     API_IMPORT_STEP,
@@ -39,6 +40,26 @@ class SimulateContactRequest:
         if model_id is None:
             return cls()
         return cls(model_id=str(model_id))
+
+
+@dataclass(frozen=True)
+class BuildScraperRequest:
+    """Optional body for POST /api/build-scraper."""
+
+    model_id: str | None = None
+    parameters: dict[str, Any] | None = None
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any] | None) -> BuildScraperRequest:
+        if not payload:
+            return cls()
+        model_id = payload.get("model_id")
+        raw_params = payload.get("parameters")
+        parameters = raw_params if isinstance(raw_params, dict) else None
+        return cls(
+            model_id=None if model_id is None else str(model_id),
+            parameters=parameters,
+        )
 
 
 def normalize_api_path(path: str) -> str:

@@ -20,6 +20,10 @@ from nutella_scraper.cad_import.view_projection_generator import (
     ViewProjectionConfig,
     ViewProjectionGenerator,
 )
+from nutella_scraper.cad_import.visual_stl import (
+    VisualStlError,
+    VisualTessellationConfig,
+)
 
 __all__ = [
     "CadImportError",
@@ -37,4 +41,6 @@ __all__ = [
     "ViewCacheStore",
     "ViewProjectionConfig",
     "ViewProjectionGenerator",
+    "VisualStlError",
+    "VisualTessellationConfig",
 ]

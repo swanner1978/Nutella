@@ -2,14 +2,82 @@
 
 from __future__ import annotations
 
+import http.client
+import threading
+import time
+import urllib.request
+from functools import partial
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from scripts.serve_viewer import (
+    ViewerHTTPRequestHandler,
+    ViewerHTTPServer,
     _remove_previous_view,
     _remove_stale_view_directories,
     build_error_payload,
+    viewer_document_path,
 )
+
+from nutella_scraper.application.simulation_execution import SimulationExecutionManager
+
+
+def test_viewer_document_path_aliases_index_to_html() -> None:
+    assert viewer_document_path("") == "/index.html"
+    assert viewer_document_path("/") == "/index.html"
+    assert viewer_document_path("/index") == "/index.html"
+    assert viewer_document_path("/index.html") == "/index.html"
+    assert viewer_document_path("/api/runtime") == "/api/runtime"
+    assert viewer_document_path("/favicon.ico") == "/favicon.ico"
+
+
+def test_index_html_is_served_inline_not_as_attachment(tmp_path: Path) -> None:
+    (tmp_path / "index.html").write_text(
+        "<!doctype html><html lang='fr'><head><title>viewer</title></head><body>ok</body></html>",
+        encoding="utf-8",
+    )
+    handler = partial(ViewerHTTPRequestHandler, directory=str(tmp_path))
+    server = ViewerHTTPServer(("127.0.0.1", 0), handler)
+    server.output_root = tmp_path
+    server.upload_root = tmp_path / "uploads"
+    server.models_root = tmp_path / "models"
+    server.active_view_dir = None
+    server.import_lock = threading.Lock()
+    server.dev_mode = False
+    server.simulation_manager = SimulationExecutionManager(tmp_path / "simulations")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    time.sleep(0.05)
+    try:
+        host, port = server.server_address
+        base = f"http://{host}:{port}"
+        with urllib.request.urlopen(f"{base}/index.html", timeout=5) as response:
+            content_type = response.headers.get("Content-Type") or response.headers.get(
+                "Content-type"
+            )
+            disposition = response.headers.get("Content-Disposition")
+            body = response.read().decode("utf-8")
+            assert response.status == 200
+            assert content_type is not None
+            assert content_type.startswith("text/html")
+            assert "attachment" not in (disposition or "").lower()
+            assert (disposition or "inline").lower().startswith("inline")
+            assert "<!doctype html>" in body.lower()
+        parsed = urlparse(base)
+        connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=5)
+        try:
+            connection.request("GET", "/index")
+            redirect = connection.getresponse()
+            assert redirect.status == 302
+            assert redirect.getheader("Location") == "/index.html"
+            assert "attachment" not in (redirect.getheader("Content-Disposition") or "").lower()
+        finally:
+            connection.close()
+    finally:
+        server.simulation_manager.shutdown()
+        server.shutdown()
+        server.server_close()
 
 
 def test_build_error_payload_includes_traceback_in_dev_mode() -> None:

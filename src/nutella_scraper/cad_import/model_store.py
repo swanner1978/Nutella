@@ -42,6 +42,8 @@ class ModelStore:
     INTERNAL_PROFILE_META = "internal_profile.json"
     CAD_REFERENCE_META = "cad_reference.json"
     REFERENCE_STEP = "reference.step"
+    VISUAL_STL = "visual.stl"
+    VISUAL_META = "visual.json"
 
     def __init__(self, base_dir: Path) -> None:
         self._base_dir = base_dir
@@ -142,6 +144,103 @@ class ModelStore:
         geometry = CadReferenceGeometryBuilder().from_step(step_path, model_id=model_id)
         self.persist_cad_reference(model_id, geometry, step_path=step_path)
         return geometry
+
+    def persist_visual(
+        self,
+        model_id: str,
+        *,
+        step_path: Path,
+        canonical: CanonicalModel3D,
+        config: object | None = None,
+    ) -> dict[str, object]:
+        """Write visualization-only visual.stl from STEP. Does not touch canonical/internal."""
+        from nutella_scraper.cad_import.geometry_validator import GeometryValidator
+        from nutella_scraper.cad_import.visual_stl import (
+            VisualTessellationConfig,
+            reload_visual_stl,
+            tessellate_visual_mesh,
+            validate_visual_mesh,
+            visual_metadata_payload,
+        )
+
+        cfg = config if isinstance(config, VisualTessellationConfig) else VisualTessellationConfig()
+        model_dir = self._base_dir / model_id
+        model_dir.mkdir(parents=True, exist_ok=True)
+        stl_path = model_dir / self.VISUAL_STL
+        mesh = tessellate_visual_mesh(step_path, cfg)
+        GeometryValidator().validate(mesh, str(step_path))
+        mesh.export(str(stl_path))
+        reloaded = reload_visual_stl(stl_path)
+        comparison = validate_visual_mesh(
+            reloaded,
+            canonical,
+            cfg,
+            source_path=str(stl_path),
+        )
+        payload = visual_metadata_payload(
+            model_id=model_id,
+            stl_path=stl_path,
+            step_path=step_path,
+            source_hash=canonical.source_hash,
+            mesh=reloaded,
+            config=cfg,
+            comparison=comparison,
+        )
+        (model_dir / self.VISUAL_META).write_text(
+            json.dumps(payload, indent=2),
+            encoding="utf-8",
+        )
+        self._merge_visual_into_model_metadata(model_dir, payload)
+        return payload
+
+    def get_visual_path(self, model_id: str) -> Path:
+        path = self._base_dir / model_id / self.VISUAL_STL
+        if not path.exists():
+            raise FileNotFoundError(f"visual.stl missing for model {model_id}")
+        return path
+
+    def reference_step_path(self, model_id: str) -> Path:
+        return self._base_dir / model_id / self.REFERENCE_STEP
+
+    def get_visual_metadata(self, model_id: str) -> dict[str, object]:
+        meta_path = self._base_dir / model_id / self.VISUAL_META
+        if not meta_path.exists():
+            raise FileNotFoundError(f"visual.json missing for model {model_id}")
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid visual.json for model {model_id}")
+        return data
+
+    def load_visual_mesh(self, model_id: str) -> trimesh.Trimesh:
+        """Load visualization-only visual.stl. Never returns CanonicalModel3D.mesh."""
+        from nutella_scraper.cad_import.visual_stl import reload_visual_stl
+
+        return reload_visual_stl(self.get_visual_path(model_id))
+
+    def _merge_visual_into_model_metadata(
+        self,
+        model_dir: Path,
+        visual_payload: dict[str, object],
+    ) -> None:
+        metadata_path = model_dir / "metadata.json"
+        if not metadata_path.exists():
+            return
+        data = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return
+        data["visual_stl"] = {
+            "filename": visual_payload["filename"],
+            "path": visual_payload["path"],
+            "bytes": visual_payload["bytes"],
+            "sha256": visual_payload["sha256"],
+            "vertex_count": visual_payload["vertex_count"],
+            "face_count": visual_payload["face_count"],
+            "bounding_box": visual_payload["bounding_box"],
+            "center_mm": visual_payload["center_mm"],
+            "source_hash": visual_payload["source_hash"],
+            "tessellation": visual_payload["tessellation"],
+        }
+        metadata_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     def get_profile(self, model_id: str) -> object:
         from nutella_scraper.domain.models.internal_jar_profile import InternalJarProfile
