@@ -7,6 +7,7 @@ only if the scraper volume stays on the interior side with
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -18,7 +19,10 @@ from nutella_scraper.domain.models.scraper_parameters import ScraperParameters
 from nutella_scraper.engines.compute.interior_surface_reference import (
     InteriorSurfaceReference,
 )
-from nutella_scraper.engines.compute.scraper_envelope_path import NUMERIC_GAP_MM
+from nutella_scraper.engines.compute.scraper_envelope_path import (
+    NUMERIC_GAP_MM,
+    scraper_length_span,
+)
 from nutella_scraper.engines.compute.scraper_rigid_motion import (
     EnvelopeContactFrame,
     RigidScraperArtifact,
@@ -35,6 +39,9 @@ _CONTACT_EPS_MM = 0.15
 # Extra edge/face samples around the wall catch a triangle that crosses
 # with all vertices still interior.
 _WALL_BAND_EXTRA_MM = 3.0
+
+# Last pose vs collision split (ms). Diagnostic only — not used by the solver.
+LAST_POSE_COLLISION_MS: dict[str, float] = {"pose_ms": 0.0, "collision_ms": 0.0}
 
 
 @dataclass(frozen=True)
@@ -74,12 +81,13 @@ def _inward_normals(
     normals = face_normals[np.clip(tri_ids, 0, len(face_normals) - 1)].copy()
     norms = np.linalg.norm(normals, axis=1, keepdims=True)
     normals = normals / np.maximum(norms, 1e-9)
-    eps = 0.25
-    plus = closest + normals * eps
-    minus = closest - normals * eps
-    r_plus = np.hypot(plus[:, 0], plus[:, 2])
-    r_minus = np.hypot(minus[:, 0], minus[:, 2])
-    normals[r_plus > r_minus] *= -1.0
+    bounds = np.asarray(surface_mesh.bounds, dtype=np.float64)
+    target = np.asarray(
+        [0.0, 0.5 * (float(bounds[0, 1]) + float(bounds[1, 1])), 0.0],
+        dtype=np.float64,
+    )
+    to_inside = target[None, :] - closest
+    normals[np.sum(normals * to_inside, axis=1) < 0.0] *= -1.0
     return normals
 
 
@@ -131,6 +139,16 @@ def _near_wall_edge_face_samples(
     return np.vstack(chunks), np.concatenate(kinds)
 
 
+def _useful_corridor_mask(
+    points: NDArray[np.float64],
+    lower_y: float,
+    opening_y: float,
+) -> NDArray[np.bool_]:
+    """True for samples inside the interior envelope height (floor → opening)."""
+    y = np.asarray(points, dtype=np.float64)[:, 1]
+    return (y >= float(lower_y) - 1e-3) & (y <= float(opening_y))
+
+
 def evaluate_envelope_collision(
     posed_mesh: trimesh.Trimesh,
     surface: InteriorSurfaceReference,
@@ -139,17 +157,37 @@ def evaluate_envelope_collision(
     """
     Hard constraint: scraper volume must stay interior-side of the envelope.
 
+    Collision is evaluated from the interior floor to the opening. Geometry
+    above the opening is outside the working volume and is ignored.
+
     Vertices are a fast reject. Edges and faces near the wall are required
     before a pose is declared VALID — a triangle can cross while all of its
-    vertices remain inside. Clearance is unsigned distance everywhere.
+    vertices remain inside. Clearance is unsigned distance in-band.
     """
     if posed_mesh.is_empty or len(posed_mesh.vertices) == 0:
         raise ValueError("Empty scraper mesh")
 
     surface_mesh = surface.to_trimesh()
     eps = _contact_eps_mm(surface_mesh)
+    opening_y, lower_y, _max_length = scraper_length_span(surface)
     vertices = np.asarray(posed_mesh.vertices, dtype=np.float64)
-    signed, distances = _signed_interior(surface_mesh, vertices)
+    in_band = _useful_corridor_mask(vertices, lower_y, opening_y)
+    clearance = float(parameters.clearance_mm)
+    if not np.any(in_band):
+        return EnvelopeCollisionReport(
+            has_collision=False,
+            admissible=True,
+            min_signed_interior_mm=float("inf"),
+            max_outward_mm=0.0,
+            min_unsigned_distance_mm=float("inf"),
+            clearance_mm=clearance,
+            vertex_hit=False,
+            edge_hit=False,
+            face_hit=False,
+            clearance_ok=True,
+        )
+
+    signed, distances = _signed_interior(surface_mesh, vertices[in_band])
     max_outward = float(np.max(-signed))
     min_signed = float(np.min(signed))
     min_unsigned = float(np.min(distances))
@@ -163,7 +201,13 @@ def evaluate_envelope_collision(
             + float(parameters.clearance_mm)
             + _WALL_BAND_EXTRA_MM
         )
-        extra, kinds = _near_wall_edge_face_samples(posed_mesh, distances, band)
+        distances_all = np.full(len(vertices), 1e9, dtype=np.float64)
+        distances_all[in_band] = distances
+        extra, kinds = _near_wall_edge_face_samples(posed_mesh, distances_all, band)
+        if len(extra) > 0:
+            extra_in = _useful_corridor_mask(extra, lower_y, opening_y)
+            extra = extra[extra_in]
+            kinds = kinds[extra_in]
         if len(extra) > 0:
             extra_signed, extra_dist = _signed_interior(surface_mesh, extra)
             max_outward = max(max_outward, float(np.max(-extra_signed)))
@@ -173,7 +217,6 @@ def evaluate_envelope_collision(
             edge_hit = bool(np.any(outward_mask[kinds == 1])) if np.any(kinds == 1) else False
             face_hit = bool(np.any(outward_mask[kinds == 2])) if np.any(kinds == 2) else False
 
-    clearance = float(parameters.clearance_mm)
     has_collision = bool(max_outward > eps)
     # Tessellation chords sit slightly inside the true CAD wall; allow the
     # same numeric band used for tangency, never a physical hole.
@@ -308,6 +351,7 @@ def pose_rigid_scraper_admissible(
     If none is admissible the last candidate is returned as BLOCKED — the
     solid is never deformed and never forced through the envelope.
     """
+    pose_started = time.perf_counter()
     progress = float(parameters.surface_progress_deg)
     if abs(progress) <= 1e-9:
         nominal = artifact.design_frame
@@ -317,9 +361,14 @@ def pose_rigid_scraper_admissible(
         nominal = envelope_contact_frame(surface, parameters)
         transform = rigid_transform_between_frames(artifact.design_frame, nominal)
         posed = apply_rigid_transform(artifact.mesh, transform)
+    LAST_POSE_COLLISION_MS["pose_ms"] = (time.perf_counter() - pose_started) * 1000.0
 
+    collision_started = time.perf_counter()
     report = evaluate_envelope_collision(posed, surface, parameters)
     if report.admissible:
+        LAST_POSE_COLLISION_MS["collision_ms"] = (
+            time.perf_counter() - collision_started
+        ) * 1000.0
         return _result(
             posed_mesh=posed,
             frame=nominal,
@@ -339,6 +388,9 @@ def pose_rigid_scraper_admissible(
         trial_report = evaluate_envelope_collision(trial_mesh, surface, parameters)
         if not trial_report.admissible:
             continue
+        LAST_POSE_COLLISION_MS["collision_ms"] = (
+            time.perf_counter() - collision_started
+        ) * 1000.0
         return _result(
             posed_mesh=trial_mesh,
             frame=candidate,
@@ -349,6 +401,9 @@ def pose_rigid_scraper_admissible(
             alternative_used=True,
         )
 
+    LAST_POSE_COLLISION_MS["collision_ms"] = (
+        time.perf_counter() - collision_started
+    ) * 1000.0
     return _result(
         posed_mesh=posed,
         frame=nominal,

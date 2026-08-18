@@ -1,17 +1,17 @@
 """3D viewer cameras — visualization only, never used by compute/collision.
 
-One scene, six lookAt cameras. The pot (visual.stl) and scraper are never
-rebuilt when the view changes.
+One scene (visual.stl + rigid scraper). A view is only a different lookAt camera.
+Meshes are never rebuilt when the view changes.
 
-Jar / CanonicalModel3D / CAD orientation (from the real model AABB, not Z-up):
+CAD / STEP convention confirmed on the imported jar (identity frame):
 
-  +Y  vertical, toward the cavity OPENING  (bbox face at max Y)
-  −Y  toward the BASE (bbox face at min Y)
-  X,Z horizontal plane
+  +Y  opening / top of the pot
+  −Y  base / bottom
+  X,Z horizontal plane  —  Z is not vertical
 
-There is no Three.js scene graph. The demo viewer projects with these lookAt
-presets. Top and Bottom sit on opposite sides of the opening axis and look
-toward the center — opposite look directions, not a 2D image flip.
+lookAt target is the AABB centre of visual.stl:
+
+  center = (bbox.min + bbox.max) / 2
 """
 
 from __future__ import annotations
@@ -21,12 +21,17 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-# Opening axis of the jar: CAD +Y = bbox face at maximum Y. Not Z.
+# Explicit jar axes. Do not treat Z as up.
 JAR_UP = np.array([0.0, 1.0, 0.0], dtype=np.float64)
 JAR_RIGHT = np.array([1.0, 0.0, 0.0], dtype=np.float64)
 JAR_FORWARD = np.array([0.0, 0.0, 1.0], dtype=np.float64)
-# Screen-up for Top/Bottom so lookAt is not degenerate (up ⟂ look).
+# Shared screen-up for Top/Bottom (look is ±Y, so up cannot be Y).
 TOP_BOTTOM_SCREEN_UP = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+
+# Iso sits farther than the ortho cameras so the whole pot stays in frame.
+ISO_DISTANCE_SCALE = 1.25
+# Above the opening, offset in X and Z (not a second Top view).
+ISO_OFFSET = np.array([1.05, 1.55, 0.80], dtype=np.float64)
 
 JAR_FRAME_CONVENTION: dict[str, Any] = {
     "frame": "Y-up jar",
@@ -35,10 +40,13 @@ JAR_FRAME_CONVENTION: dict[str, Any] = {
     "base": "-Y",
     "horizontal_plane": "XZ",
     "viewer": "canvas lookAt (no Three.js)",
+    "look_at": "AABB centre of visual.stl",
+    "top_eye": "center + (0, +d, 0)",
+    "bottom_eye": "center + (0, -d, 0)",
     "note": (
-        "Opening is the AABB face at max Y of visual.stl (CAD orientation). "
-        "Vertical is not Z. Top/Bottom are opposite cameras around the center. "
-        "Profil/Gauche/Droite/Iso are other cameras on the same scene."
+        "Opening is +Y. Z is not vertical. Top and Bottom are opposite cameras "
+        "around the AABB centre. Profil/Gauche/Droite keep their existing axes. "
+        "Iso is perspective from above with a lateral offset."
     ),
 }
 
@@ -48,6 +56,16 @@ def _normalize(vector: NDArray[np.float64]) -> NDArray[np.float64]:
     if norm <= 1e-12:
         return vector
     return vector / norm
+
+
+def aabb_center(
+    mins_mm: NDArray[np.float64],
+    maxs_mm: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """lookAt / orbit centre = AABB midpoint of the visual mesh."""
+    mins = np.asarray(mins_mm, dtype=np.float64)
+    maxs = np.asarray(maxs_mm, dtype=np.float64)
+    return 0.5 * (mins + maxs)
 
 
 def look_at_camera(
@@ -86,21 +104,9 @@ def opening_direction_from_bounds(
     mins_mm: NDArray[np.float64],
     maxs_mm: NDArray[np.float64],
 ) -> NDArray[np.float64]:
-    """Unit vector from AABB center toward the real opening (max-Y face).
-
-    The CAD frame stores the cavity opening at maximum Y. Z is never treated
-    as vertical just because it is the third coordinate.
-    """
-    mins = np.asarray(mins_mm, dtype=np.float64)
-    maxs = np.asarray(maxs_mm, dtype=np.float64)
-    center = 0.5 * (mins + maxs)
-    toward_opening = np.array(
-        [0.0, float(maxs[1] - center[1]), 0.0],
-        dtype=np.float64,
-    )
-    if float(np.linalg.norm(toward_opening)) <= 1e-12:
-        return JAR_UP.copy()
-    return _normalize(toward_opening)
+    """Opening axis for this CAD frame: always +Y (max-Y AABB face)."""
+    del mins_mm, maxs_mm
+    return JAR_UP.copy()
 
 
 def cameras_from_center_and_distance(
@@ -109,21 +115,22 @@ def cameras_from_center_and_distance(
     *,
     opening: NDArray[np.float64] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Six cameras sharing the same look-at center and the same scene."""
+    """Six cameras sharing the same AABB look-at centre and the same scene."""
+    del opening  # CAD opening is +Y; kept in the signature for call-site stability.
     center = np.asarray(center_mm, dtype=np.float64)
     distance = float(distance_mm)
-    up_axis = JAR_UP if opening is None else _normalize(np.asarray(opening, dtype=np.float64))
-    # Opening side of the AABB. Opposite side is the base.
-    top_eye = center + up_axis * distance
-    bottom_eye = center - up_axis * distance
-    # Profil: look along −Z (XY on screen, opening toward the top).
+
+    # Dessus / Dessous: opposite cameras on ±Y, both looking at the centre.
+    top_eye = center + np.array([0.0, +distance, 0.0], dtype=np.float64)
+    bottom_eye = center + np.array([0.0, -distance, 0.0], dtype=np.float64)
+    # Profil: existing convention (XY on screen, opening toward the top).
     side_eye = center + JAR_FORWARD * distance
-    # Gauche / Droite: opposite cameras on ±X.
+    # Gauche / Droite: existing opposite cameras on ±X.
     left_eye = center + JAR_RIGHT * distance
     right_eye = center - JAR_RIGHT * distance
-    # Iso: above the opening, offset laterally so depth and interior show.
-    iso_dir = _normalize(up_axis * 1.25 + JAR_RIGHT * 0.95 + JAR_FORWARD * 0.70)
-    iso_eye = center + iso_dir * distance
+    # Iso: above the opening, offset laterally, farther so the whole pot is visible.
+    iso_eye = center + _normalize(ISO_OFFSET) * (distance * ISO_DISTANCE_SCALE)
+
     return {
         "top": look_at_camera(
             eye=top_eye,
@@ -140,25 +147,25 @@ def cameras_from_center_and_distance(
         "side": look_at_camera(
             eye=side_eye,
             target=center,
-            up=up_axis,
+            up=JAR_UP,
             projection="orthographic",
         ),
         "left": look_at_camera(
             eye=left_eye,
             target=center,
-            up=up_axis,
+            up=JAR_UP,
             projection="orthographic",
         ),
         "right": look_at_camera(
             eye=right_eye,
             target=center,
-            up=up_axis,
+            up=JAR_UP,
             projection="orthographic",
         ),
         "iso": look_at_camera(
             eye=iso_eye,
             target=center,
-            up=up_axis,
+            up=JAR_UP,
             projection="perspective",
         ),
     }
@@ -170,8 +177,7 @@ def cameras_from_bounds(
 ) -> tuple[dict[str, dict[str, Any]], NDArray[np.float64], float]:
     mins = np.asarray(mins_mm, dtype=np.float64)
     maxs = np.asarray(maxs_mm, dtype=np.float64)
-    center = 0.5 * (mins + maxs)
+    center = aabb_center(mins, maxs)
     span = float(np.max(maxs - mins))
     distance = max(span * 2.2, 1.0)
-    opening = opening_direction_from_bounds(mins, maxs)
-    return cameras_from_center_and_distance(center, distance, opening=opening), center, distance
+    return cameras_from_center_and_distance(center, distance), center, distance

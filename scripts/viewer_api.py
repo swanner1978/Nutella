@@ -48,6 +48,7 @@ class BuildScraperRequest:
 
     model_id: str | None = None
     parameters: dict[str, Any] | None = None
+    include_svg_overlays: bool = False
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any] | None) -> BuildScraperRequest:
@@ -59,6 +60,7 @@ class BuildScraperRequest:
         return cls(
             model_id=None if model_id is None else str(model_id),
             parameters=parameters,
+            include_svg_overlays=payload.get("include_svg_overlays") is True,
         )
 
 

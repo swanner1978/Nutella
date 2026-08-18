@@ -183,3 +183,20 @@ def test_viewer_template_exposes_progress_cancel_and_diagnostics() -> None:
     assert 'data-visibility-toggle="pot"' in template
     assert 'id="toolbar-build-scraper"' in template
     assert "/api/build-scraper" in template
+    assert 'id="toggle-scene-scraper"' in template
+    assert 'id="toggle-coordinate-frame"' in template
+
+
+def test_build_scraper_request_defaults_skip_svg_overlays() -> None:
+    from scripts.viewer_api import BuildScraperRequest
+
+    assert BuildScraperRequest.from_dict(None).include_svg_overlays is False
+    assert BuildScraperRequest.from_dict({"model_id": "x"}).include_svg_overlays is False
+    assert (
+        BuildScraperRequest.from_dict({"include_svg_overlays": True}).include_svg_overlays
+        is True
+    )
+    assert (
+        BuildScraperRequest.from_dict({"include_svg_overlays": "true"}).include_svg_overlays
+        is False
+    )

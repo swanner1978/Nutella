@@ -117,6 +117,11 @@
       .toolbar-btn.primary:hover:not(:disabled) {
         background: #fff;
       }
+      .toolbar-btn[data-active="true"] {
+        border-color: #c8b000;
+        background: #2a2818;
+        color: #ffe600;
+      }
       .toolbar-status {
         flex-shrink: 0;
         min-width: 10rem;
@@ -379,6 +384,14 @@
         color: #eee;
         font-size: 0.68rem;
       }
+      .scraper-length-warning {
+        margin: -0.35rem 0 0.55rem;
+        color: #e6b800;
+        font-size: 0.68rem;
+      }
+      .scraper-length-warning[hidden] {
+        display: none;
+      }
       .scraper-actions {
         display: flex;
         flex-wrap: wrap;
@@ -543,6 +556,12 @@
       .diagnostic-panel[data-enabled="false"] .accordion-body {
         color: #555;
       }
+      .rotation-perf {
+        margin: 0 0 0.6rem;
+        white-space: pre-wrap;
+        color: #c8d4e0;
+        font: 0.66rem/1.45 Consolas, monospace;
+      }
       .diagnostic-summary {
         white-space: pre-wrap;
         color: #9aa5b1;
@@ -639,20 +658,34 @@
         overflow: hidden;
       }
       .view-label {
-        flex-shrink: 0;
-        padding: 0.45rem 0.85rem;
-        border-bottom: 1px solid #111;
-        color: #666;
-        font-size: 0.65rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        display: none;
       }
-      .view-stage {
+      .view-frame {
         position: relative;
         flex: 1;
+        min-width: 0;
         min-height: 0;
+      }
+      .view-stage {
+        position: absolute;
+        inset: 0;
         overflow: hidden;
         background: #000;
+      }
+      .viewcube-canvas {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 168px;
+        height: 204px;
+        z-index: 6;
+        background: transparent;
+        cursor: pointer;
+        opacity: 0.94;
+        pointer-events: auto;
+      }
+      .viewcube-canvas[hidden] {
+        display: none;
       }
       .view-viewport {
         position: absolute;
@@ -675,6 +708,7 @@
         background: #000;
         display: block;
       }
+      .view-viewport.iso-orbiting {
         cursor: grabbing;
       }
       .view-transform {
@@ -777,7 +811,7 @@
           <button class="toolbar-btn" id="toolbar-build-scraper" type="button" disabled title="Build Scraper">
             <span class="btn-label">Build Scraper</span>
           </button>
-          <button class="toolbar-btn" id="toolbar-scraper-panel" type="button" disabled title="Panneau Scraper paramétrique">
+          <button class="toolbar-btn" id="toolbar-scraper-panel" type="button" disabled title="Vue scraper A + cage de contrôle">
             <span class="btn-label">Scraper</span>
           </button>
         </div>
@@ -818,7 +852,7 @@
                   Pot
                 </label>
                 <label class="toggle">
-                  <input type="checkbox" data-visibility-toggle="scraper" checked />
+                  <input type="checkbox" data-visibility-toggle="scraper" />
                   Scraper3D
                 </label>
                 <label class="toggle">
@@ -863,7 +897,7 @@
               </header>
               <div class="accordion-body">
                 <label class="toggle">
-                  <input type="checkbox" id="scraper-show-toggle" checked />
+                  <input type="checkbox" id="scraper-show-toggle" />
                   Afficher
                 </label>
 
@@ -943,6 +977,7 @@
                   <label class="scraper-field">Longueur (mm)<input id="scraper-length" type="number" step="0.1" min="0.1" value="60" /></label>
                   <label class="scraper-field">Épaisseur (mm)<input id="scraper-thickness" type="number" step="0.1" min="0.1" value="4" /></label>
                 </div>
+                <p class="scraper-length-warning" id="scraper-length-warning" hidden></p>
 
                 <p class="panel-section-label">Biseau</p>
                 <div class="scraper-field-grid">
@@ -1058,8 +1093,9 @@
               </header>
               <div class="accordion-body">
                 <div id="diagnostic-content">Aucun profil disponible.</div>
+                <pre id="rotation-perf" class="rotation-perf">Rotation : pas encore de mesure.</pre>
                 <label class="toggle">
-                  <input type="checkbox" data-layer-toggle="wireframe" />
+                  <input type="checkbox" id="toggle-wireframe" data-layer-toggle="wireframe" />
                   Afficher le wireframe (debug maillage)
                 </label>
                 <label class="toggle">
@@ -1100,12 +1136,26 @@
                 <input type="checkbox" id="toggle-coordinate-frame" data-layer-toggle="coordinate-frame" checked />
                 Repère
               </label>
+              <label class="toggle" title="Afficher le scraper paramétrique">
+                <input type="checkbox" id="toggle-scene-scraper" data-visibility-toggle="scraper" />
+                Scraper
+              </label>
             </div>
             <section class="view-column">
-              <div class="view-label" id="active-view-label">Vue de dessus (Top View) — œil +Y, regard −Y (repère Y-up)</div>
-              <div class="view-stage" id="main-stage"></div>
+              <div class="view-label" id="active-view-label" hidden></div>
+              <div class="view-frame">
+                <div class="view-stage" id="main-stage"></div>
+                <canvas
+                  id="viewcube-canvas"
+                  class="viewcube-canvas"
+                  width="280"
+                  height="340"
+                  hidden
+                  aria-label="ViewCube"
+                ></canvas>
+              </div>
               <div class="view-dims" id="main-dims"></div>
-              <div class="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
+              <div class="view-hint" id="view-hint">Molette : zoom · Glisser : déplacer · Double-clic : réinitialiser</div>
             </section>
           </div>
         </main>
@@ -1118,13 +1168,15 @@
       const mainStage = document.getElementById("main-stage");
       const mainDims = document.getElementById("main-dims");
       const activeViewLabel = document.getElementById("active-view-label");
+      const viewHint = document.getElementById("view-hint");
       const viewSelect = document.getElementById("view-select");
+      const viewCubeCanvas = document.getElementById("viewcube-canvas");
       const SVG_VIEW_ORDER = [];
       const CAMERA_VIEW_NAMES = ["top", "bottom", "side", "left", "right", "iso"];
       const VIEW_ORDER = ["top", "bottom", "side", "left", "right", "iso"];
-      // One 3D scene (visual.stl + scraper). A view is only a different camera.
-      // Opening = AABB max Y (CAD), not Z-up. Top/Bottom are opposite lookAt cameras.
-      // Contour / wireframe toggles are independent of the camera.
+      // One scene: visual.stl + rigid scraper. Switching a view only swaps the
+      // lookAt camera (AABB centre, +Y = opening). Never rebuild geometry, never
+      // call /api/build-scraper, never force wireframe.
       const VIEW_SPECS = {
         side: {
           plane: "XY",
@@ -1174,6 +1226,14 @@
           labelEn: "Isometric View",
           dimensionAxes: "X × Y × Z",
         },
+        back: {
+          plane: "XY",
+          viewAxis: "+Z",
+          cameraEye: "−Z",
+          labelFr: "Vue arrière",
+          labelEn: "Back View",
+          dimensionAxes: "X × Y",
+        },
       };
       let currentViewName = "top";
       let cachedViewSvgs = {};
@@ -1191,7 +1251,21 @@
         collision: false,
         canvas: null,
         staticCache: null,
+        ready: false,
+        loadError: null,
+        controlCage: null,
       };
+      const ISO_ELEVATION_LIMIT = 1.35;
+      const ISO_ORBIT_SENSITIVITY = 0.008;
+      // Same fill as cameraFromPreset: span occupies 0.42/0.5 of min(viewport).
+      const CAMERA_FIT_VIEWPORT_FACTOR = 0.42;
+      const CAMERA_FIT_HALF_SPAN = 0.5;
+      const CAMERA_PERSPECTIVE_FOCAL_FACTOR = 0.95;
+      let isoOrbit = null;
+      let isoOrbitDragging = false;
+      let isoOrbitLastX = 0;
+      let isoOrbitLastY = 0;
+      let isoRedrawScheduled = false;
       const API = {
         importStep: "/api/import-step",
         simulateContact: "/api/simulate-contact",
@@ -1215,6 +1289,8 @@
       const diagnosticPanel = document.getElementById("simulation-diagnostics");
       const diagnosticContent = document.getElementById("diagnostic-content");
       const diagnosticSummary = document.getElementById("diagnostic-summary");
+      const rotationPerfEl = document.getElementById("rotation-perf");
+      const rotationPerfSamples = [];
       const envelopeToggle = document.getElementById("toggle-envelope");
       const trajectoryToggle = document.getElementById("toggle-trajectory");
       const toolbarReload = document.getElementById("toolbar-reload-step");
@@ -1222,6 +1298,7 @@
       const toolbarScraperPanel = document.getElementById("toolbar-scraper-panel");
       const scraperPanel = document.getElementById("scraper-panel");
       const scraperShowToggle = document.getElementById("scraper-show-toggle");
+      const scraperFrameToggle = document.getElementById("toggle-scene-scraper");
       const scraperRecalculateButton = document.getElementById("scraper-recalculate");
       const scraperParamProof = document.getElementById("scraper-param-proof");
       const SCRAPER_FIELD_IDS = {
@@ -1243,6 +1320,18 @@
       const ROTATION_STEP_MIN_DEG = 1;
       const ROTATION_STEP_MAX_DEG = 30;
       const ROTATION_REPLAY_BASE_MS = 320; // ms per cached frame at 1x
+      const SCRAPER_A_REFERENCE = {
+        width_mm: 2.5,
+        thickness_mm: 2.5,
+        length_mm: 10000,
+        clearance_mm: 0,
+        bevel_angle_deg: 0,
+        relief_angle_deg: 0,
+        helix_rate_deg_per_mm: 0,
+        rotation_angle_deg: 0,
+      };
+      let scraperSoloMode = false;
+      let scraperSoloPrevLayers = null;
       const ROTATION_CACHE_PARAM_KEYS = [
         "width_mm",
         "length_mm",
@@ -1375,6 +1464,7 @@
         viewport.addEventListener(
           "wheel",
           (event) => {
+            if (currentViewName === "iso") return;
             event.preventDefault();
             const factor = event.deltaY > 0 ? 0.92 : 1.08;
             scale = Math.min(10, Math.max(0.15, scale * factor));
@@ -1384,6 +1474,7 @@
         );
 
         viewport.addEventListener("mousedown", (event) => {
+          if (currentViewName === "iso") return;
           if (event.button !== 0) return;
           dragging = true;
           lastX = event.clientX;
@@ -1392,7 +1483,7 @@
         });
 
         window.addEventListener("mousemove", (event) => {
-          if (!dragging) return;
+          if (!dragging || currentViewName === "iso") return;
           panX += event.clientX - lastX;
           panY += event.clientY - lastY;
           lastX = event.clientX;
@@ -1541,6 +1632,20 @@
           syncRotationControls(
             Number(parameters.rotation_angle_deg ?? parameters.rotation_deg ?? 0),
           );
+        }
+      }
+
+      function applyLengthLimit(result) {
+        const limit = result?.length_limit ?? {};
+        const el = document.getElementById("scraper-length-warning");
+        if (!el) return;
+        const warning = limit.warning;
+        if (warning) {
+          el.hidden = false;
+          el.textContent = String(warning);
+        } else {
+          el.hidden = true;
+          el.textContent = "";
         }
       }
 
@@ -2102,6 +2207,9 @@
         if (calquesToggle && sourceCheckbox !== calquesToggle) {
           calquesToggle.checked = checked;
         }
+        if (scraperFrameToggle && sourceCheckbox !== scraperFrameToggle) {
+          scraperFrameToggle.checked = checked;
+        }
         applyLayerVisibility();
       }
 
@@ -2109,9 +2217,60 @@
         if (!scraperPanel) return;
         const open = scraperPanel.dataset.expanded !== "true";
         setPanelExpanded(scraperPanel, open);
-        if (toolbarScraperPanel) {
-          toolbarScraperPanel.dataset.active = String(open);
+      }
+
+      function setScraperSoloLayers(hiddenPot) {
+        const potToggle = document.querySelector('[data-visibility-toggle="pot"]');
+        const envelopeEl = envelopeToggle;
+        if (hiddenPot) {
+          scraperSoloPrevLayers = {
+            pot: potToggle ? potToggle.checked : true,
+            envelope: envelopeEl ? envelopeEl.checked : false,
+          };
+          if (potToggle) potToggle.checked = false;
+          if (envelopeEl) envelopeEl.checked = false;
+        } else if (scraperSoloPrevLayers) {
+          if (potToggle) potToggle.checked = scraperSoloPrevLayers.pot;
+          if (envelopeEl) envelopeEl.checked = scraperSoloPrevLayers.envelope;
+          scraperSoloPrevLayers = null;
         }
+        if (scraperFrameToggle) {
+          scraperFrameToggle.checked = true;
+          syncScraperVisibilityToggles(scraperFrameToggle);
+        }
+        applyLayerVisibility();
+      }
+
+      function exitScraperSoloView() {
+        scraperSoloMode = false;
+        if (toolbarScraperPanel) toolbarScraperPanel.dataset.active = "false";
+        setScraperSoloLayers(false);
+        redrawCameraView();
+      }
+
+      async function enterScraperSoloView() {
+        if (scraperSoloMode) {
+          exitScraperSoloView();
+          return;
+        }
+        if (!activeModelLoaded || !currentModelId) {
+          setStatus("Importez un modèle STEP avant le mode Scraper", "error");
+          return;
+        }
+        stopRotationPlay();
+        scraperSoloMode = true;
+        if (toolbarScraperPanel) toolbarScraperPanel.dataset.active = "true";
+        setScraperSoloLayers(true);
+        switchView("iso");
+        const current = readScraperParametersFromForm();
+        const parameters = { ...current, ...SCRAPER_A_REFERENCE };
+        setStatus("Affichage du scraper A de référence…", "loading");
+        const result = await buildScraperOnly(parameters);
+        scene3d.controlCage = result.control_cage ?? null;
+        scene3d.scraperTransform = null;
+        setStatus("Scraper A + cage de contrôle", "ready");
+        redrawCameraView();
+        return result;
       }
 
       async function buildScraperOnly(parametersOverride = null) {
@@ -2127,13 +2286,19 @@
         toolbarBuildScraper.disabled = true;
         if (scraperRecalculateButton) scraperRecalculateButton.disabled = true;
         const buildPromise = (async () => {
+          const transferStarted = performance.now();
           const response = await fetch(API.buildScraper, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model_id: currentModelId, parameters }),
+            body: JSON.stringify({
+              model_id: currentModelId,
+              parameters,
+              include_svg_overlays: false,
+            }),
             cache: "no-store",
           });
           const result = await readJsonResponse(response);
+          result._transfer_ms = performance.now() - transferStarted;
           if (!response.ok) {
             throw new Error(formatServerError(result, `Échec build Scraper (${response.status})`));
           }
@@ -2142,8 +2307,10 @@
         scraperBuildInFlight = buildPromise;
         try {
           const result = await buildPromise;
+          const frontendStarted = performance.now();
           if (result.parameters) writeScraperParametersToForm(result.parameters);
           else syncRotationControls(parameters.rotation_angle_deg);
+          applyLengthLimit(result);
           const blockedLive =
             result.validation?.pose_status === "BLOCKED" ||
             result.collision?.pose_status === "BLOCKED" ||
@@ -2173,6 +2340,29 @@
           );
           storeRotationFrame(frameFromBuildResult(result, angle));
           const blocked = blockedLive;
+          const server = result.timings_ms ?? {};
+          const transferMs = Number(result._transfer_ms);
+          const serverTotal = Number(server.server_total_ms);
+          recordRotationPerf({
+            kind: "build-scraper",
+            angle,
+            pose_ms: server.pose_ms,
+            collision_ms: server.collision_ms,
+            mesh_serialize_ms: server.mesh_serialize_ms,
+            overlays_ms: server.overlays_ms,
+            json_encode_ms: server.json_encode_ms,
+            server_total_ms: server.server_total_ms,
+            transfer_ms: transferMs,
+            network_ms: Number.isFinite(transferMs) && Number.isFinite(serverTotal)
+              ? Math.max(0, transferMs - serverTotal)
+              : transferMs,
+            frontend_ms: Math.max(
+              0,
+              performance.now() - frontendStarted - Number(scene3d.lastRenderMs || 0),
+            ),
+            render_ms: scene3d.lastRenderMs,
+            wireframe: isLayerEnabled("wireframe"),
+          });
           const proof = blocked
             ? `MOUVEMENT BLOQUÉ — collision enveloppe à θ=${angle.toFixed(1)}°`
             : `Scraper V1 — ${result.scraper.vertex_count} v / ${result.scraper.face_count} f · ` +
@@ -2185,8 +2375,7 @@
           );
           if (calquesToggle && !calquesToggle.checked) {
             calquesToggle.checked = true;
-            if (scraperShowToggle) scraperShowToggle.checked = true;
-            applyLayerVisibility();
+            syncScraperVisibilityToggles(calquesToggle);
           }
           if (!rotationPlayRunning && !rotationPrepRunning) {
             if (blocked) {
@@ -2586,9 +2775,17 @@
         scene3d.interior = null;
         scene3d.scraperRest = null;
         scene3d.scraperTransform = null;
+        scene3d.controlCage = null;
         scene3d.collision = false;
         scene3d.canvas = null;
         scene3d.staticCache = null;
+        scene3d.ready = false;
+        scene3d.loadError = null;
+        isoOrbit = null;
+        scraperSoloMode = false;
+        scraperSoloPrevLayers = null;
+        if (toolbarScraperPanel) toolbarScraperPanel.dataset.active = "false";
+        setViewCubeVisible(false);
         currentViewName = "top";
         if (viewSelect) viewSelect.value = "top";
         activeViewLabel.textContent = formatViewLabel("top", VIEW_SPECS.top);
@@ -2618,6 +2815,27 @@
           faces: flattenArray(mesh.faces, Uint32Array),
           edges: flattenArray(mesh.edges, Uint32Array),
         };
+      }
+
+      function ensureMeshEdges(mesh) {
+        if (!mesh?.faces || (mesh.edges && mesh.edges.length)) return;
+        const faces = mesh.faces;
+        const seen = new Set();
+        const edges = [];
+        const add = (a, b) => {
+          const lo = a < b ? a : b;
+          const hi = a < b ? b : a;
+          const key = `${lo},${hi}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          edges.push(lo, hi);
+        };
+        for (let i = 0; i < faces.length; i += 3) {
+          add(faces[i], faces[i + 1]);
+          add(faces[i + 1], faces[i + 2]);
+          add(faces[i + 2], faces[i]);
+        }
+        mesh.edges = new Uint32Array(edges);
       }
 
       function transformPoint(matrix, x, y, z, out, index) {
@@ -2661,18 +2879,60 @@
         return { x, y, z };
       }
 
+      function aabbWorldSpan(bounds) {
+        return Math.max(
+          bounds.max[0] - bounds.min[0],
+          bounds.max[1] - bounds.min[1],
+          bounds.max[2] - bounds.min[2],
+          1,
+        );
+      }
+
+      function projectedAabbSpan(bounds, basis) {
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        const xs = [bounds.min[0], bounds.max[0]];
+        const ys = [bounds.min[1], bounds.max[1]];
+        const zs = [bounds.min[2], bounds.max[2]];
+        for (const x of xs) {
+          for (const y of ys) {
+            for (const z of zs) {
+              const camX = x * basis.x[0] + y * basis.x[1] + z * basis.x[2];
+              const camY = x * basis.y[0] + y * basis.y[1] + z * basis.y[2];
+              minX = Math.min(minX, camX);
+              maxX = Math.max(maxX, camX);
+              minY = Math.min(minY, camY);
+              maxY = Math.max(maxY, camY);
+            }
+          }
+        }
+        return Math.max(maxX - minX, maxY - minY, 1);
+      }
+
+      function cameraFitOrthoScale(viewportMin, fittedSpan) {
+        return (
+          (viewportMin * CAMERA_FIT_VIEWPORT_FACTOR) /
+          (fittedSpan * CAMERA_FIT_HALF_SPAN)
+        );
+      }
+
+      function cameraFitPerspectiveDistance(fittedSpan) {
+        return (
+          (CAMERA_PERSPECTIVE_FOCAL_FACTOR * (fittedSpan * CAMERA_FIT_HALF_SPAN)) /
+          CAMERA_FIT_VIEWPORT_FACTOR
+        );
+      }
+
       function cameraFromPreset(preset, width, height, bounds) {
         const eye = preset.eye;
         const target = preset.target;
         const basis = preset.basis
           ? { x: preset.basis.x, y: preset.basis.y, z: preset.basis.z }
           : lookAtBasis(eye, target, preset.up);
-        const span = Math.max(
-          bounds.max[0] - bounds.min[0],
-          bounds.max[1] - bounds.min[1],
-          bounds.max[2] - bounds.min[2],
-          1,
-        );
+        const span = aabbWorldSpan(bounds);
+        const viewportMin = Math.min(width, height);
         return {
           eye,
           target,
@@ -2680,9 +2940,599 @@
           width,
           height,
           projection: preset.projection || "perspective",
-          focal: Math.min(width, height) * 0.95,
-          orthoScale: (Math.min(width, height) * 0.42) / (span * 0.5),
+          focal: viewportMin * CAMERA_PERSPECTIVE_FOCAL_FACTOR,
+          orthoScale: cameraFitOrthoScale(viewportMin, span),
         };
+      }
+
+      function isoOrbitLimitsFromBounds(bounds) {
+        const span = aabbWorldSpan(bounds);
+        return {
+          minDistance: span * 0.65,
+          maxDistance: span * 12,
+        };
+      }
+
+      function isoEyeFromOrbit(center, orbit) {
+        const ce = Math.cos(orbit.elevation);
+        return [
+          center[0] + orbit.distance * ce * Math.sin(orbit.azimuth),
+          center[1] + orbit.distance * Math.sin(orbit.elevation),
+          center[2] + orbit.distance * ce * Math.cos(orbit.azimuth),
+        ];
+      }
+
+      function resetIsoOrbitFromScene() {
+        const preset = scene3d.cameras?.iso;
+        const center = scene3d.center;
+        if (!preset?.eye || !center) {
+          isoOrbit = null;
+          return;
+        }
+        const dx = preset.eye[0] - center[0];
+        const dy = preset.eye[1] - center[1];
+        const dz = preset.eye[2] - center[2];
+        const distance = Math.hypot(dx, dy, dz) || 1;
+        const bounds = scene3d.jar ? meshBounds(scene3d.jar) : null;
+        const limits = bounds
+          ? isoOrbitLimitsFromBounds(bounds)
+          : { minDistance: distance * 0.25, maxDistance: distance * 8 };
+        isoOrbit = {
+          azimuth: Math.atan2(dx, dz),
+          elevation: Math.asin(Math.max(-1, Math.min(1, dy / distance))),
+          distance: Math.min(limits.maxDistance, Math.max(limits.minDistance, distance)),
+          minDistance: limits.minDistance,
+          maxDistance: limits.maxDistance,
+        };
+        fitIsoOrbitDistance();
+      }
+
+      function fitIsoOrbitDistance() {
+        if (!isoOrbit || !scene3d.center) return;
+        const bounds = scene3d.jar ? meshBounds(scene3d.jar) : null;
+        if (!bounds) return;
+        const probe = {
+          azimuth: isoOrbit.azimuth,
+          elevation: isoOrbit.elevation,
+          distance: 1,
+        };
+        const eye = isoEyeFromOrbit(scene3d.center, probe);
+        const basis = lookAtBasis(eye, scene3d.center, [0, 1, 0]);
+        const fittedSpan = projectedAabbSpan(bounds, basis);
+        const distance = cameraFitPerspectiveDistance(fittedSpan);
+        isoOrbit.distance = Math.min(
+          isoOrbit.maxDistance,
+          Math.max(isoOrbit.minDistance, distance),
+        );
+      }
+
+      function isoCameraPreset() {
+        const base = scene3d.cameras?.iso;
+        const center = scene3d.center;
+        if (!isoOrbit || !center) return base;
+        const eye = isoEyeFromOrbit(center, isoOrbit);
+        return {
+          ...(base || {}),
+          eye,
+          target: center,
+          up: [0, 1, 0],
+          projection: "perspective",
+          basis: lookAtBasis(eye, center, [0, 1, 0]),
+        };
+      }
+
+      function requestIsoCameraRedraw() {
+        if (isoRedrawScheduled) return;
+        isoRedrawScheduled = true;
+        requestAnimationFrame(() => {
+          isoRedrawScheduled = false;
+          if (currentViewName === "iso") redrawCameraView();
+        });
+      }
+
+      function applyIsoZoom(deltaY) {
+        if (currentViewName !== "iso" || !isoOrbit) return;
+        const factor = deltaY > 0 ? 1.08 : 0.92;
+        isoOrbit.distance = Math.min(
+          isoOrbit.maxDistance,
+          Math.max(isoOrbit.minDistance, isoOrbit.distance * factor),
+        );
+        scene3d.staticCache = null;
+        requestIsoCameraRedraw();
+      }
+
+      function applyIsoOrbitDelta(dx, dy) {
+        if (currentViewName !== "iso" || !isoOrbit) return;
+        isoOrbit.azimuth -= dx * ISO_ORBIT_SENSITIVITY;
+        isoOrbit.elevation = Math.max(
+          -ISO_ELEVATION_LIMIT,
+          Math.min(ISO_ELEVATION_LIMIT, isoOrbit.elevation - dy * ISO_ORBIT_SENSITIVITY),
+        );
+        scene3d.staticCache = null;
+        requestIsoCameraRedraw();
+      }
+
+      function updateViewHint() {
+        if (!viewHint) return;
+        viewHint.textContent =
+          currentViewName === "iso"
+            ? "Molette : zoom caméra · Ctrl + clic gauche : orbite · ViewCube / flèches · Double-clic : réinitialiser la caméra"
+            : "Molette : zoom · Glisser : déplacer · ViewCube / flèches · Double-clic : réinitialiser";
+      }
+
+      function isViewerSceneReady() {
+        return Boolean(
+          scene3d.ready &&
+            scene3d.cameras &&
+            scene3d.center &&
+            scene3d.jar,
+        );
+      }
+
+      function derivedBackCamera() {
+        const side = scene3d.cameras?.side;
+        const center = scene3d.center;
+        if (!side?.eye || !center) return null;
+        const eye = [
+          center[0] - (side.eye[0] - center[0]),
+          center[1] - (side.eye[1] - center[1]),
+          center[2] - (side.eye[2] - center[2]),
+        ];
+        return {
+          ...side,
+          eye,
+          target: center,
+          up: [0, 1, 0],
+          projection: "orthographic",
+          basis: lookAtBasis(eye, center, [0, 1, 0]),
+        };
+      }
+
+      function cameraPresetForView(viewName) {
+        if (viewName === "iso") return isoCameraPreset() || scene3d.cameras?.iso;
+        if (viewName === "back") return derivedBackCamera();
+        return scene3d.cameras?.[viewName] || null;
+      }
+
+      const VIEWCUBE_CHAMFER = 0.36;
+      const VIEWCUBE_ARROW_STEP = Math.PI / 12;
+      const VIEWCUBE_FACES = [
+        { id: "top", label: "TOP", dir: [0, 1, 0], view: "top", axis: 1, sign: 1 },
+        { id: "bottom", label: "BOTTOM", dir: [0, -1, 0], view: "bottom", axis: 1, sign: -1 },
+        { id: "front", label: "FRONT", dir: [0, 0, 1], view: "side", axis: 2, sign: 1 },
+        { id: "back", label: "BACK", dir: [0, 0, -1], view: "back", axis: 2, sign: -1 },
+        { id: "left", label: "LEFT", dir: [1, 0, 0], view: "left", axis: 0, sign: 1 },
+        { id: "right", label: "RIGHT", dir: [-1, 0, 0], view: "right", axis: 0, sign: -1 },
+      ];
+      const VIEWCUBE_PARTS = buildViewCubeParts();
+      let viewCubeHits = [];
+      let viewCubeHoverId = null;
+
+      function buildViewCubeParts() {
+        const C = VIEWCUBE_CHAMFER;
+        const H = 1;
+        const faces = VIEWCUBE_FACES.map((face) => {
+          const axis = face.axis;
+          const sign = face.sign;
+          const u = (axis + 1) % 3;
+          const v = (axis + 2) % 3;
+          const pt = (su, sv) => {
+            const q = [0, 0, 0];
+            q[axis] = sign * H;
+            q[u] = su * (H - C);
+            q[v] = sv * (H - C);
+            return q;
+          };
+          const verts =
+            sign > 0
+              ? [pt(-1, -1), pt(1, -1), pt(1, 1), pt(-1, 1)]
+              : [pt(1, -1), pt(-1, -1), pt(-1, 1), pt(1, 1)];
+          return { ...face, kind: "face", verts };
+        });
+        const edges = [];
+        for (const [axisA, axisB] of [
+          [0, 1],
+          [0, 2],
+          [1, 2],
+        ]) {
+          for (const signA of [-1, 1]) {
+            for (const signB of [-1, 1]) {
+              const axisC = 3 - axisA - axisB;
+              const pt = (sc, onA) => {
+                const q = [0, 0, 0];
+                q[axisC] = sc * (H - C);
+                q[axisA] = onA ? signA * H : signA * (H - C);
+                q[axisB] = onA ? signB * (H - C) : signB * H;
+                return q;
+              };
+              const dir = [0, 0, 0];
+              dir[axisA] = signA;
+              dir[axisB] = signB;
+              edges.push({
+                kind: "edge",
+                id: `e${axisA}${signA}${axisB}${signB}`,
+                dir,
+                verts: ensureOutwardWinding(
+                  [pt(-1, true), pt(1, true), pt(1, false), pt(-1, false)],
+                  dir,
+                ),
+              });
+            }
+          }
+        }
+        const corners = [];
+        for (const sx of [-1, 1]) {
+          for (const sy of [-1, 1]) {
+            for (const sz of [-1, 1]) {
+              corners.push({
+                kind: "corner",
+                id: `c${sx}${sy}${sz}`,
+                dir: [sx, sy, sz],
+                verts: ensureOutwardWinding(
+                  [
+                    [sx * H, sy * (H - C), sz * (H - C)],
+                    [sx * (H - C), sy * H, sz * (H - C)],
+                    [sx * (H - C), sy * (H - C), sz * H],
+                  ],
+                  [sx, sy, sz],
+                ),
+              });
+            }
+          }
+        }
+        return { faces, edges, corners };
+      }
+
+      function ensureOutwardWinding(verts, outward) {
+        const a = verts[0];
+        const b = verts[1];
+        const c = verts[2];
+        const nx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
+        const ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+        const nz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+        const facing =
+          nx * outward[0] + ny * outward[1] + nz * outward[2];
+        if (facing < 0) verts.reverse();
+        return verts;
+      }
+
+      function setViewCubeVisible(visible) {
+        if (!viewCubeCanvas) return;
+        viewCubeCanvas.hidden = !visible;
+      }
+
+      function viewCubeCamera() {
+        const preset = cameraPresetForView(currentViewName);
+        const size = 252;
+        let eye = [1.15, 1.55, 0.9];
+        let up = [0, 1, 0];
+        if (preset?.eye && (preset.target || scene3d.center)) {
+          const target = preset.target || scene3d.center;
+          const lx = target[0] - preset.eye[0];
+          const ly = target[1] - preset.eye[1];
+          const lz = target[2] - preset.eye[2];
+          const len = Math.hypot(lx, ly, lz) || 1;
+          eye = [(-lx / len) * 3.6, (-ly / len) * 3.6, (-lz / len) * 3.6];
+          up = preset.up || [0, 1, 0];
+        }
+        const basis = lookAtBasis(eye, [0, 0, 0], up);
+        return {
+          eye,
+          target: [0, 0, 0],
+          ...basis,
+          width: size,
+          height: size * 0.78,
+          projection: "perspective",
+          orthoScale: size * 0.16,
+          focal: size * 0.72,
+        };
+      }
+
+      function polygonFacing(verts, camera) {
+        const a = verts[0];
+        const b = verts[1];
+        const c = verts[2];
+        const ux = b[0] - a[0];
+        const uy = b[1] - a[1];
+        const uz = b[2] - a[2];
+        const vx = c[0] - a[0];
+        const vy = c[1] - a[1];
+        const vz = c[2] - a[2];
+        const nx = uy * vz - uz * vy;
+        const ny = uz * vx - ux * vz;
+        const nz = ux * vy - uy * vx;
+        return (
+          nx * (camera.eye[0] - a[0]) +
+            ny * (camera.eye[1] - a[1]) +
+            nz * (camera.eye[2] - a[2]) >
+          0.02
+        );
+      }
+
+      function projectPoly(verts, camera) {
+        return verts.map((p) => projectPoint(p[0], p[1], p[2], camera));
+      }
+
+      function polyDepth(pts) {
+        return pts.reduce((sum, p) => sum + p.depth, 0) / pts.length;
+      }
+
+      function fillProjectedPoly(ctx, pts, fill, stroke, lineWidth) {
+        if (!pts.length) return;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        if (fill) {
+          ctx.fillStyle = fill;
+          ctx.fill();
+        }
+        if (stroke) {
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = lineWidth ?? 1;
+          ctx.stroke();
+        }
+      }
+
+      function drawFaceLabel(ctx, label, pts, hover) {
+        const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+        const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        const ux = pts[1].x - pts[0].x;
+        const uy = pts[1].y - pts[0].y;
+        let angle = Math.atan2(uy, ux);
+        if (Math.cos(angle) < -0.15) angle += Math.PI;
+        const width = Math.hypot(ux, uy);
+        if (width < 18) return;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.fillStyle = hover ? "#111" : "#1a1a1a";
+        ctx.font = `bold ${Math.max(9, Math.min(13, width * 0.22))}px ui-sans-serif, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+      }
+
+      function arrowPath(cx, cy, angle, size) {
+        const pts = [
+          [0, -size],
+          [size * 0.62, size * 0.38],
+          [size * 0.22, size * 0.38],
+          [size * 0.22, size],
+          [-size * 0.22, size],
+          [-size * 0.22, size * 0.38],
+          [-size * 0.62, size * 0.38],
+        ];
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        return pts.map(([px, py]) => ({
+          x: cx + px * cos - py * sin,
+          y: cy + px * sin + py * cos,
+        }));
+      }
+
+      function inflatePoly(pts, pixels) {
+        const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+        const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        return pts.map((p) => {
+          const dx = p.x - cx;
+          const dy = p.y - cy;
+          const len = Math.hypot(dx, dy) || 1;
+          return { ...p, x: p.x + (dx / len) * pixels, y: p.y + (dy / len) * pixels };
+        });
+      }
+
+      function drawViewCube() {
+        if (!viewCubeCanvas) return;
+        const ctx = viewCubeCanvas.getContext("2d");
+        const w = viewCubeCanvas.width;
+        const h = viewCubeCanvas.height;
+        ctx.clearRect(0, 0, w, h);
+        viewCubeHits = [];
+        if (!isViewerSceneReady()) return;
+        const camera = viewCubeCamera();
+        camera.height = h;
+        camera.width = w;
+        const projectGroup = (parts) =>
+          parts
+            .filter((part) => polygonFacing(part.verts, camera))
+            .map((part) => {
+              const pts = projectPoly(part.verts, camera);
+              return { ...part, pts, depth: polyDepth(pts) };
+            })
+            .sort((a, b) => b.depth - a.depth);
+        const faces = projectGroup(VIEWCUBE_PARTS.faces);
+        const edges = projectGroup(VIEWCUBE_PARTS.edges);
+        const corners = projectGroup(VIEWCUBE_PARTS.corners);
+        const paint = (piece) => {
+          const hover = viewCubeHoverId === piece.id;
+          let fill = "#ececec";
+          if (piece.kind === "edge") fill = hover ? "#9ad0ff" : "#b8b8b8";
+          else if (piece.kind === "corner") fill = hover ? "#7ec0f8" : "#9a9a9a";
+          else fill = hover ? "#b8dcff" : "#ececec";
+          fillProjectedPoly(ctx, piece.pts, fill, "#4a4a4a", piece.kind === "face" ? 1.1 : 1.2);
+          if (piece.kind === "face") drawFaceLabel(ctx, piece.label, piece.pts, hover);
+          const hitPts =
+            piece.kind === "edge" ? inflatePoly(piece.pts, 6) : piece.pts;
+          viewCubeHits.push({
+            kind: piece.kind,
+            id: piece.id,
+            view: piece.view,
+            dir: piece.dir,
+            depth: piece.depth,
+            contains: (x, y) => pointInQuad(x, y, hitPts),
+          });
+        };
+        for (const piece of faces) paint(piece);
+        for (const piece of edges) paint(piece);
+        for (const piece of corners) paint(piece);
+        const origin = projectPoint(0, 0, 0, camera);
+        const cubeSpan = [...faces, ...edges, ...corners].reduce((span, piece) => {
+          for (const p of piece.pts) {
+            span = Math.max(span, Math.hypot(p.x - origin.x, p.y - origin.y));
+          }
+          return span;
+        }, 40);
+        const arrowSize = 19;
+        const radius = cubeSpan + arrowSize * 0.85;
+        const arrows = [
+          { id: "arrow-up", angle: 0, x: origin.x, y: origin.y - radius },
+          { id: "arrow-down", angle: Math.PI, x: origin.x, y: origin.y + radius },
+          { id: "arrow-left", angle: -Math.PI / 2, x: origin.x - radius, y: origin.y },
+          { id: "arrow-right", angle: Math.PI / 2, x: origin.x + radius, y: origin.y },
+        ];
+        for (const arrow of arrows) {
+          const pts = arrowPath(arrow.x, arrow.y, arrow.angle, arrowSize);
+          const hover = viewCubeHoverId === arrow.id;
+          fillProjectedPoly(ctx, pts, hover ? "#4ea3ff" : "#8a8a8a", "#2e2e2e", 1);
+          viewCubeHits.push({
+            kind: "arrow",
+            id: arrow.id,
+            depth: -10,
+            contains: (x, y) => pointInQuad(x, y, inflatePoly(pts, 5)),
+          });
+        }
+        const isoX = origin.x + radius * 0.78;
+        const isoY = origin.y + radius * 0.92;
+        const isoBox = [
+          { x: isoX - 18, y: isoY - 12 },
+          { x: isoX + 18, y: isoY - 12 },
+          { x: isoX + 18, y: isoY + 12 },
+          { x: isoX - 18, y: isoY + 12 },
+        ];
+        const isoHover = viewCubeHoverId === "iso";
+        fillProjectedPoly(ctx, isoBox, isoHover ? "#b8dcff" : "#dedede", "#444", 1);
+        ctx.fillStyle = "#222";
+        ctx.font = "bold 10px ui-sans-serif, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("ISO", isoX, isoY);
+        viewCubeHits.push({
+          kind: "iso",
+          id: "iso",
+          depth: -11,
+          contains: (x, y) => pointInQuad(x, y, isoBox),
+        });
+      }
+
+      function pointInQuad(px, py, pts) {
+        let sign = 0;
+        for (let i = 0; i < pts.length; i += 1) {
+          const a = pts[i];
+          const b = pts[(i + 1) % pts.length];
+          const cross = (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
+          if (Math.abs(cross) < 1e-6) continue;
+          const next = Math.sign(cross);
+          if (sign && next !== sign) return false;
+          sign = next;
+        }
+        return true;
+      }
+
+      function distToSegment(px, py, ax, ay, bx, by) {
+        const abx = bx - ax;
+        const aby = by - ay;
+        const denom = abx * abx + aby * aby || 1;
+        const t = Math.max(0, Math.min(1, ((px - ax) * abx + (py - ay) * aby) / denom));
+        return Math.hypot(px - (ax + t * abx), py - (ay + t * aby));
+      }
+
+      function pickViewCube(clientX, clientY) {
+        if (!viewCubeCanvas || viewCubeCanvas.hidden) return null;
+        const rect = viewCubeCanvas.getBoundingClientRect();
+        const x = ((clientX - rect.left) / rect.width) * viewCubeCanvas.width;
+        const y = ((clientY - rect.top) / rect.height) * viewCubeCanvas.height;
+        const order = { arrow: 0, iso: 0, corner: 1, edge: 2, face: 3 };
+        const hits = viewCubeHits
+          .filter((hit) => hit.contains(x, y))
+          .sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9) || a.depth - b.depth);
+        return hits[0] || null;
+      }
+
+      function ensureIsoOrbitFromCurrentView() {
+        const preset = cameraPresetForView(currentViewName);
+        const center = scene3d.center;
+        if (!isoOrbit) resetIsoOrbitFromScene();
+        if (!isoOrbit || !preset?.eye || !center) return;
+        const dx = preset.eye[0] - center[0];
+        const dy = preset.eye[1] - center[1];
+        const dz = preset.eye[2] - center[2];
+        const distance = Math.hypot(dx, dy, dz) || isoOrbit.distance;
+        isoOrbit.azimuth = Math.atan2(dx, dz);
+        isoOrbit.elevation = Math.max(
+          -ISO_ELEVATION_LIMIT,
+          Math.min(
+            ISO_ELEVATION_LIMIT,
+            Math.asin(Math.max(-1, Math.min(1, dy / distance))),
+          ),
+        );
+        isoOrbit.distance = Math.min(
+          isoOrbit.maxDistance,
+          Math.max(isoOrbit.minDistance, distance),
+        );
+      }
+
+      function applyViewCubeArrow(arrowId) {
+        ensureIsoOrbitFromCurrentView();
+        if (!isoOrbit) return;
+        if (arrowId === "arrow-left") isoOrbit.azimuth += VIEWCUBE_ARROW_STEP;
+        if (arrowId === "arrow-right") isoOrbit.azimuth -= VIEWCUBE_ARROW_STEP;
+        if (arrowId === "arrow-up") {
+          isoOrbit.elevation = Math.min(
+            ISO_ELEVATION_LIMIT,
+            isoOrbit.elevation + VIEWCUBE_ARROW_STEP,
+          );
+        }
+        if (arrowId === "arrow-down") {
+          isoOrbit.elevation = Math.max(
+            -ISO_ELEVATION_LIMIT,
+            isoOrbit.elevation - VIEWCUBE_ARROW_STEP,
+          );
+        }
+        scene3d.staticCache = null;
+        switchView("iso");
+      }
+
+      function applyViewCubeHit(hit) {
+        console.info("[viewer:camera]", {
+          kind: "viewcube",
+          region: hit.id,
+          dir: hit.dir,
+          view: hit.view || hit.kind,
+          api: false,
+        });
+        if (hit.kind === "arrow") {
+          applyViewCubeArrow(hit.id);
+          return;
+        }
+        if (hit.kind === "iso") {
+          resetIsoOrbitFromScene();
+          switchView("iso");
+          return;
+        }
+        if (hit.kind === "face" && hit.view && hit.view !== "iso") {
+          switchView(hit.view);
+          return;
+        }
+        applyIsoOrbitDirection(hit.dir);
+        switchView("iso");
+      }
+
+      function applyIsoOrbitDirection(dir) {
+        if (!isoOrbit) resetIsoOrbitFromScene();
+        if (!isoOrbit) return;
+        const len = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+        const nx = dir[0] / len;
+        const ny = dir[1] / len;
+        const nz = dir[2] / len;
+        isoOrbit.azimuth = Math.atan2(nx, nz);
+        isoOrbit.elevation = Math.max(
+          -ISO_ELEVATION_LIMIT,
+          Math.min(ISO_ELEVATION_LIMIT, Math.asin(Math.max(-1, Math.min(1, ny)))),
+        );
+        fitIsoOrbitDistance();
+        scene3d.staticCache = null;
       }
 
       function projectPoint(px, py, pz, camera) {
@@ -2803,9 +3653,8 @@
           addEdge(f[i * 3 + 2], f[i * 3], i);
         }
         for (const rec of edgeFaces.values()) {
-          const isBoundary = rec.fronts + rec.backs === 1;
           const isSilhouette = rec.fronts > 0 && rec.backs > 0;
-          if (!isBoundary && !isSilhouette) continue;
+          if (!isSilhouette) continue;
           const ia = rec.a * 3;
           const ib = rec.b * 3;
           const a = projectPoint(v[ia], v[ia + 1], v[ia + 2], camera);
@@ -2827,6 +3676,52 @@
         const toggle = document.querySelector(`[data-layer-toggle="${layerName}"]`);
         if (!toggle) return layerName === "contour";
         return toggle.checked;
+      }
+
+      function ensureWireframeDefaultOff() {
+        const toggle =
+          document.getElementById("toggle-wireframe") ||
+          document.querySelector('[data-layer-toggle="wireframe"]');
+        if (toggle) toggle.checked = false;
+      }
+
+      function formatPerfMs(value) {
+        const n = Number(value);
+        return Number.isFinite(n) ? `${n.toFixed(1)} ms` : "—";
+      }
+
+      function recordRotationPerf(sample) {
+        rotationPerfSamples.push(sample);
+        if (rotationPerfSamples.length > 48) rotationPerfSamples.shift();
+        console.info("[viewer:perf]", sample);
+        if (!rotationPerfEl) return;
+        const off = rotationPerfSamples.filter((s) => s.wireframe === false && s.render_ms != null);
+        const on = rotationPerfSamples.filter((s) => s.wireframe === true && s.render_ms != null);
+        const avg = (list) => {
+          if (!list.length) return null;
+          return list.reduce((sum, s) => sum + Number(s.render_ms), 0) / list.length;
+        };
+        const lines = [
+          `Dernière mesure (${sample.kind ?? "frame"} · θ=${sample.angle ?? "—"}°)`,
+          `pose (A)          ${formatPerfMs(sample.pose_ms)}`,
+          `collision (B)     ${formatPerfMs(sample.collision_ms)}`,
+          `mesh (C)          ${formatPerfMs(sample.mesh_serialize_ms)}`,
+          `overlays          ${formatPerfMs(sample.overlays_ms)}`,
+          `JSON (encode)     ${formatPerfMs(sample.json_encode_ms)}`,
+          `network (D)       ${formatPerfMs(sample.network_ms)}`,
+          `frontend (E)      ${formatPerfMs(sample.frontend_ms)}`,
+          `rendu (F)         ${formatPerfMs(sample.render_ms)}  wireframe=${sample.wireframe ? "ON" : "OFF"}`,
+          `serveur total     ${formatPerfMs(sample.server_total_ms)}`,
+          `fetch+parse       ${formatPerfMs(sample.transfer_ms)}`,
+        ];
+        if (off.length || on.length) {
+          lines.push(
+            "",
+            `rendu moyen wireframe OFF  ${formatPerfMs(avg(off))}  (n=${off.length})`,
+            `rendu moyen wireframe ON   ${formatPerfMs(avg(on))}  (n=${on.length})`,
+          );
+        }
+        rotationPerfEl.textContent = lines.join("\n");
       }
 
       function meshBounds(mesh) {
@@ -2870,8 +3765,58 @@
         }
       }
 
-      function fmtVec3(values) {
-        return `[${values.map((v) => Number(v).toFixed(1)).join(", ")}]`;
+      function drawControlCageOverlay(ctx, cage, camera) {
+        if (!cage || cage.editable === true) return;
+        const drawPolyline = (line, color, width, alpha) => {
+          if (!line || line.length < 2) return;
+          ctx.beginPath();
+          let started = false;
+          for (let i = 0; i < line.length; i += 1) {
+            const p = projectPoint(line[i][0], line[i][1], line[i][2], camera);
+            if (p.depth <= 0.01) continue;
+            if (!started) {
+              ctx.moveTo(p.x, p.y);
+              started = true;
+            } else {
+              ctx.lineTo(p.x, p.y);
+            }
+          }
+          if (!started) return;
+          ctx.globalAlpha = alpha;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
+          ctx.stroke();
+        };
+        const lines = cage.polylines_mm || [];
+        const centerIdx = Number.isInteger(cage.center_row_index)
+          ? cage.center_row_index
+          : Math.floor(lines.length / 2);
+        lines.forEach((line, index) => {
+          const isCenter = index === centerIdx;
+          drawPolyline(
+            line,
+            isCenter ? "#d7ecff" : "#4a6278",
+            isCenter ? 1.5 : 0.8,
+            isCenter ? 0.55 : 0.4,
+          );
+        });
+        lines.forEach((line, index) => {
+          const isCenter = index === centerIdx;
+          const radius = isCenter ? 2.6 : 1.6;
+          for (const point of line || []) {
+            const p = projectPoint(point[0], point[1], point[2], camera);
+            if (p.depth <= 0.01) continue;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+            ctx.globalAlpha = isCenter ? 0.95 : 0.7;
+            ctx.fillStyle = isCenter ? "#ffffff" : "#9eb4c8";
+            ctx.fill();
+            ctx.lineWidth = 0.8;
+            ctx.strokeStyle = "#1a1a1a";
+            ctx.stroke();
+          }
+        });
+        ctx.globalAlpha = 1;
       }
 
       function cameraOppositionDebug() {
@@ -2909,83 +3854,72 @@
         };
       }
 
-      function drawCameraDebugOverlay(ctx, viewName) {
-        const preset = scene3d.cameras?.[viewName];
-        const debug = cameraOppositionDebug();
-        ctx.save();
-        ctx.globalAlpha = 1;
-        ctx.font = "12px ui-monospace, SFMono-Regular, Consolas, monospace";
-        ctx.fillStyle = "#c8c8c8";
-        const lines = [
-          `${viewName.toUpperCase()} eye ${preset ? fmtVec3(preset.eye) : "?"}  look ${preset ? fmtVec3(preset.look_direction) : "?"}`,
-        ];
-        if (debug && (viewName === "top" || viewName === "bottom")) {
-          lines.push(
-            `TOP eye ${fmtVec3(debug.top.eye)}  look ${fmtVec3(debug.top.look_direction)}`,
-            `BOT eye ${fmtVec3(debug.bottom.eye)}  look ${fmtVec3(debug.bottom.look_direction)}`,
-            `BOT-C ≈ -(TOP-C)  err=${debug.posErr.toExponential(1)}`,
-            `BOT look ≈ -TOP look  err=${debug.dirErr.toExponential(1)}  ${debug.opposed ? "OK" : "FAIL"}`,
-          );
-        }
-        lines.forEach((line, index) => {
-          ctx.fillText(line, 12, 22 + index * 16);
-        });
-        ctx.restore();
-      }
-
       function isCameraView(viewName) {
-        return CAMERA_VIEW_NAMES.includes(viewName);
+        return CAMERA_VIEW_NAMES.includes(viewName) || viewName === "back";
       }
 
       function drawScene3D(canvas, viewName) {
+        const renderStarted = performance.now();
         const ctx = canvas.getContext("2d");
         const width = canvas.width;
         const height = canvas.height;
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, width, height);
-        const preset = scene3d.cameras?.[viewName];
+        const preset = cameraPresetForView(viewName);
         if (!preset) {
           ctx.fillStyle = "#888";
           ctx.font = "16px sans-serif";
-          ctx.fillText("Caméra 3D indisponible — rechargez le modèle", 24, 40);
+          const initializing = !scene3d.ready && !scene3d.loadError;
+          ctx.fillText(
+            initializing
+              ? "Initialisation de la vue 3D…"
+              : "Caméra 3D indisponible — rechargez le modèle",
+            24,
+            40,
+          );
+          setViewCubeVisible(false);
           return;
         }
-        const bounds = scene3d.jar
+        const bounds = scraperSoloMode && scene3d.scraperRest
+          ? meshBounds(scene3d.scraperRest)
+          : scene3d.jar
           ? meshBounds(scene3d.jar)
           : { min: [-40, 0, -40], max: [40, 80, 40] };
         const camera = cameraFromPreset(preset, width, height, bounds);
         const showPot =
+          !scraperSoloMode &&
           document.querySelector('[data-visibility-toggle="pot"]')?.checked !== false;
-        const showScraper =
-          document.querySelector('[data-visibility-toggle="scraper"]')?.checked !== false;
+        const showScraper = scraperFrameToggle
+          ? scraperFrameToggle.checked
+          : document.querySelector('#sidebar-accordions [data-visibility-toggle="scraper"]')?.checked === true;
         const showInterior =
+          !scraperSoloMode &&
           document.querySelector('[data-visibility-toggle="envelope"]')?.checked === true;
         const showContour = isLayerEnabled("contour");
         const showWireframe = isLayerEnabled("wireframe");
         const showFrame = isLayerEnabled("coordinate-frame");
         const staticKey =
           `${viewName}|${width}x${height}|pot:${showPot}|int:${showInterior}` +
-          `|contour:${showContour}|wire:${showWireframe}|frame:${showFrame}`;
+          `|contour:${showContour}|wire:${showWireframe}|frame:${showFrame}` +
+          (viewName === "iso" && isoOrbit
+            ? `|az:${isoOrbit.azimuth.toFixed(4)}|el:${isoOrbit.elevation.toFixed(4)}|d:${isoOrbit.distance.toFixed(3)}`
+            : "");
         let items;
         if (scene3d.staticCache && scene3d.staticCache.key === staticKey) {
           items = scene3d.staticCache.items.slice();
         } else {
           items = [];
           if (showPot && scene3d.jar) {
-            collectTriangles(scene3d.jar, "#5c5c5c", 0.88, camera, items, true);
-            if (showContour) {
-              collectSilhouetteEdges(scene3d.jar, "#ffffff", 1, camera, items, 2);
-            }
+            collectSilhouetteEdges(scene3d.jar, "#d4d4d4", 1, camera, items, 2);
             if (showWireframe) {
+              ensureMeshEdges(scene3d.jar);
               collectEdges(scene3d.jar, "#777777", 0.55, camera, items, 0.65);
             }
           }
           if (showInterior && scene3d.interior) {
-            collectTriangles(scene3d.interior, "#55ffff", 0.32, camera, items, true);
-            if (showContour) {
-              collectSilhouetteEdges(scene3d.interior, "#a855f7", 1, camera, items, 1.1);
-            }
+            collectSilhouetteEdges(scene3d.interior, "#a855f7", 1, camera, items, 1.1);
             if (showWireframe) {
+              ensureMeshEdges(scene3d.interior);
               collectEdges(scene3d.interior, "#55ffff", 0.55, camera, items, 0.65);
             }
           }
@@ -3007,10 +3941,12 @@
         }
         if (showScraper && scene3d.scraperRest) {
           const posed = {
-            vertices: posedScraperVertices(scene3d.scraperRest, scene3d.scraperTransform),
+            vertices: scraperSoloMode
+              ? scene3d.scraperRest.vertices
+              : posedScraperVertices(scene3d.scraperRest, scene3d.scraperTransform),
             faces: scene3d.scraperRest.faces,
           };
-          const color = scene3d.collision ? "#ff6b6b" : "#f2c94c";
+          const color = scene3d.collision && !scraperSoloMode ? "#ff6b6b" : "#ffe600";
           collectTriangles(posed, color, 0.92, camera, items, true);
         }
         items.sort((a, b) => b.depth - a.depth);
@@ -3035,7 +3971,22 @@
           }
         }
         ctx.globalAlpha = 1;
-        drawCameraDebugOverlay(ctx, viewName);
+        if (scraperSoloMode && scene3d.controlCage) {
+          drawControlCageOverlay(ctx, scene3d.controlCage, camera);
+        }
+        setViewCubeVisible(true);
+        drawViewCube();
+        scene3d.lastRenderMs = performance.now() - renderStarted;
+        if (!rotationPrepRunning) {
+          recordRotationPerf({
+            kind: "render",
+            angle: Number(document.getElementById("scraper-rotation")?.value ?? NaN),
+            render_ms: scene3d.lastRenderMs,
+            wireframe: showWireframe,
+            view: viewName,
+            cache_hit: Boolean(scene3d.staticCache && scene3d.staticCache.key === staticKey),
+          });
+        }
       }
 
       async function loadViewerScene(modelId, signal) {
@@ -3054,6 +4005,7 @@
         scene3d.jar = flattenMesh(payload.jar);
         scene3d.interior = flattenMesh(payload.interior);
         scene3d.staticCache = null;
+        resetIsoOrbitFromScene();
         const debug = cameraOppositionDebug();
         if (debug) {
           console.info("[viewer:cameras]", {
@@ -3084,7 +4036,10 @@
         if (result?.scraper_geometry) {
           scene3d.scraperRest = flattenMesh(result.scraper_geometry);
         }
-        if (result?.scraper_transform) {
+        if (result?.control_cage) {
+          scene3d.controlCage = result.control_cage;
+        }
+        if (result?.scraper_transform && !scraperSoloMode) {
           scene3d.scraperTransform = result.scraper_transform;
         }
         scene3d.collision =
@@ -3166,7 +4121,7 @@
           sizeLabel = `${dx.toFixed(1)} × ${dz.toFixed(1)} mm`;
         } else if (viewName === "iso") {
           sizeLabel = `${dx.toFixed(1)} × ${dy.toFixed(1)} × ${dz.toFixed(1)} mm`;
-        } else if (viewName === "side") {
+        } else if (viewName === "side" || viewName === "back") {
           sizeLabel = `${Math.max(dx, dz).toFixed(1)} × ${dy.toFixed(1)} mm`;
         } else {
           sizeLabel = `${dz.toFixed(1)} × ${dy.toFixed(1)} mm`;
@@ -3178,13 +4133,30 @@
       }
 
       function renderActiveView() {
+        // Camera swap only: same visual.stl, same scraper pose, same layer toggles.
         const viewName = currentViewName;
         const view = VIEW_SPECS[viewName];
+        if (!isViewerSceneReady()) {
+          setViewCubeVisible(false);
+          if (scene3d.loadError) {
+            showStagePlaceholder(
+              mainStage,
+              `Caméra 3D indisponible — ${scene3d.loadError.message}`,
+            );
+          } else {
+            showStagePlaceholder(mainStage, "Initialisation de la vue 3D…");
+          }
+          return;
+        }
         if (!isCameraView(viewName) || !view) {
           showStagePlaceholder(mainStage, "Vue indisponible — réimportez le STEP");
           return;
         }
         activeViewLabel.textContent = formatViewLabel(viewName, view);
+        updateViewHint();
+        if (viewName === "iso") {
+          resetViewTransforms();
+        }
         if (cachedModelData) {
           mainDims.innerHTML = dimensionHtmlForView(viewName, cachedModelData, view);
         }
@@ -3199,9 +4171,13 @@
       function switchView(viewName) {
         if (!VIEW_SPECS[viewName]) return;
         currentViewName = viewName;
-        if (viewSelect && viewSelect.value !== viewName) {
+        if (
+          viewSelect &&
+          [...viewSelect.options].some((option) => option.value === viewName)
+        ) {
           viewSelect.value = viewName;
         }
+        updateViewHint();
         renderActiveView();
       }
 
@@ -3242,16 +4218,30 @@
         currentViewName = "top";
         viewSelect.value = "top";
         displayMetadata(data);
-        renderActiveView();
+        scene3d.ready = false;
+        scene3d.loadError = null;
+        showStagePlaceholder(mainStage, "Initialisation de la vue 3D…");
+        setViewCubeVisible(false);
         activeModelLoaded = true;
         currentModelId = data.model_id;
-        loadViewerScene(data.model_id, signal)
-          .then(() => {
-            if (isCameraView(currentViewName)) redrawCameraView();
-          })
-          .catch((error) => {
-            console.error("[viewer:scene3d]", error);
-          });
+        setStatus("Initialisation de la vue 3D…", "loading");
+        try {
+          await loadViewerScene(data.model_id, signal);
+          if (sequence !== loadSequence) return;
+          scene3d.ready = true;
+          scene3d.loadError = null;
+          renderActiveView();
+        } catch (error) {
+          if (sequence !== loadSequence) return;
+          scene3d.ready = false;
+          scene3d.loadError = error;
+          console.error("[viewer:scene3d]", error);
+          showStagePlaceholder(
+            mainStage,
+            `Caméra 3D indisponible — ${error.message}`,
+          );
+          setViewCubeVisible(false);
+        }
         stopRotationPlay();
         clearRotationCache();
         setRotationPrepProgress(null);
@@ -3262,7 +4252,13 @@
           "",
           `?model_id=${encodeURIComponent(data.model_id)}&mesh_sha256=${data.canonical_mesh_sha256}`,
         );
-        setStatus("Modèle chargé", "ready");
+        if (scene3d.loadError) {
+          setStatus("Caméra 3D indisponible", "error");
+        } else if (scene3d.ready) {
+          setStatus("Modèle chargé", "ready");
+        } else {
+          setStatus("Initialisation de la vue 3D…", "loading");
+        }
         syncToolbarState(false);
         // Detect coloured interior faces once per STEP load; toggle only toggles visibility.
         fetchInteriorContour().catch((error) => {
@@ -3692,8 +4688,80 @@
       }
       simulateButton.addEventListener("click", simulateContact);
       viewSelect.addEventListener("change", () => {
+        if (viewSelect.value === "iso") resetIsoOrbitFromScene();
         switchView(viewSelect.value);
       });
+      mainStage.addEventListener(
+        "wheel",
+        (event) => {
+          if (currentViewName !== "iso") return;
+          event.preventDefault();
+          event.stopPropagation();
+          applyIsoZoom(event.deltaY);
+        },
+        { passive: false, capture: true },
+      );
+      mainStage.addEventListener(
+        "mousedown",
+        (event) => {
+          if (currentViewName !== "iso") return;
+          if (!event.ctrlKey || event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          isoOrbitDragging = true;
+          isoOrbitLastX = event.clientX;
+          isoOrbitLastY = event.clientY;
+          mainStage.querySelector(".view-viewport")?.classList.add("iso-orbiting");
+        },
+        true,
+      );
+      window.addEventListener("mousemove", (event) => {
+        if (!isoOrbitDragging) return;
+        applyIsoOrbitDelta(event.clientX - isoOrbitLastX, event.clientY - isoOrbitLastY);
+        isoOrbitLastX = event.clientX;
+        isoOrbitLastY = event.clientY;
+      });
+      window.addEventListener("mouseup", () => {
+        if (!isoOrbitDragging) return;
+        isoOrbitDragging = false;
+        mainStage.querySelector(".view-viewport")?.classList.remove("iso-orbiting");
+      });
+      mainStage.addEventListener("dblclick", (event) => {
+        if (currentViewName !== "iso") return;
+        event.preventDefault();
+        resetIsoOrbitFromScene();
+        scene3d.staticCache = null;
+        requestIsoCameraRedraw();
+      });
+      viewCubeCanvas?.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const hit = pickViewCube(event.clientX, event.clientY);
+        if (hit) applyViewCubeHit(hit);
+      });
+      viewCubeCanvas?.addEventListener("pointermove", (event) => {
+        const hit = pickViewCube(event.clientX, event.clientY);
+        const nextId = hit?.id || null;
+        if (nextId === viewCubeHoverId) return;
+        viewCubeHoverId = nextId;
+        viewCubeCanvas.style.cursor = nextId ? "pointer" : "default";
+        drawViewCube();
+      });
+      viewCubeCanvas?.addEventListener("pointerleave", () => {
+        if (!viewCubeHoverId) return;
+        viewCubeHoverId = null;
+        drawViewCube();
+      });
+      viewCubeCanvas?.addEventListener(
+        "wheel",
+        (event) => {
+          if (currentViewName !== "iso") return;
+          event.preventDefault();
+          event.stopPropagation();
+          applyIsoZoom(event.deltaY);
+        },
+        { passive: false },
+      );
       posePrevButton.addEventListener("click", () => {
         if (currentPoseIndex <= 0) return;
         displaySimulationPose(currentPoseIndex - 1).catch((error) => {
@@ -3730,7 +4798,13 @@
       toolbarBuildScraper.addEventListener("click", () => {
         buildScraperOnly();
       });
-      toolbarScraperPanel?.addEventListener("click", toggleScraperPanel);
+      toolbarScraperPanel?.addEventListener("click", () => {
+        enterScraperSoloView().catch((error) => {
+          scraperSoloMode = false;
+          if (toolbarScraperPanel) toolbarScraperPanel.dataset.active = "false";
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
       scraperRecalculateButton?.addEventListener("click", () => {
         buildScraperOnly().catch((error) => {
           setStatus(error.message.split("\n")[0], "error");
@@ -3738,6 +4812,9 @@
       });
       scraperShowToggle?.addEventListener("change", () => {
         syncScraperVisibilityToggles(scraperShowToggle);
+      });
+      scraperFrameToggle?.addEventListener("change", () => {
+        syncScraperVisibilityToggles(scraperFrameToggle);
       });
       document
         .querySelector('#sidebar-accordions [data-visibility-toggle="scraper"]')
@@ -3811,6 +4888,7 @@
       setPlaybackStatus("—");
 
       async function initialize() {
+        ensureWireframeDefaultOff();
         initializeAccordions();
         clearGraphics();
         syncPoseNavigator();

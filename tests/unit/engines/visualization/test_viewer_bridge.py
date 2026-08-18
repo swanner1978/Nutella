@@ -125,8 +125,18 @@ class TestViewerBridge:
         }
         assert payload["jar"]["source"] == "visual.stl"
         assert len(payload["jar"]["vertices"]) > 0
-        assert len(payload["jar"]["edges"]) > 0
+        assert "edges" not in payload["jar"]
         assert payload["jar"]["faces"]
+        if payload["interior"] is not None:
+            assert "edges" not in payload["interior"]
+
+    def test_unique_edges_helper_remains_available_for_explicit_wireframe(self) -> None:
+        from nutella_scraper.engines.visualization.viewer_bridge import _unique_edges
+
+        faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int64)
+        edges = _unique_edges(faces)
+        assert len(edges) == 5
+
 
     def test_viewer_scene_jar_comes_from_visual_stl_not_canonical(
         self, viewer_dir: Path

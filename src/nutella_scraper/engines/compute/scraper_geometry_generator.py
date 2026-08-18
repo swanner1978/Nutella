@@ -11,6 +11,7 @@ from nutella_scraper.engines.compute.interior_surface_reference import (
     InteriorSurfaceReference,
 )
 from nutella_scraper.engines.compute.scraper_envelope_path import (
+    LENGTH_EXCEEDS_ENVELOPE_MSG,
     EnvelopeStation,
     ScraperEnvelopePath,
     ScraperEnvelopePathBuilder,
@@ -49,6 +50,7 @@ class ScraperGeometryGenerator:
         sections: list[NDArray[np.float64]] = []
         for station in envelope_path.stations:
             sections.append(self._section_at_station(parameters, station))
+        self._validate_loft_sections(sections)
 
         mesh = self._loft_sections(sections)
         if mesh.is_empty or len(mesh.faces) == 0:
@@ -75,6 +77,31 @@ class ScraperGeometryGenerator:
         if not bool(getattr(mesh, "is_winding_consistent", True)):
             raise ValueError("Loft winding is inconsistent")
 
+    @staticmethod
+    def _validate_loft_sections(sections: list[NDArray[np.float64]]) -> None:
+        if len(sections) < 2:
+            raise ValueError("Need at least two sections to loft a scraper")
+        n_pts = len(sections[0])
+        if n_pts < 4:
+            raise ValueError("Loft section has too few vertices")
+        min_edge = 1e-6
+        min_sep = 1e-3
+        for index, section in enumerate(sections):
+            if len(section) != n_pts:
+                raise ValueError("All scraper sections must share the same vertex count")
+            edges = np.linalg.norm(
+                np.diff(section, axis=0, append=section[:1]),
+                axis=1,
+            )
+            if float(np.min(edges)) < min_edge:
+                raise ValueError(
+                    f"Loft section {index} has a zero-length edge (degenerate polygon)"
+                )
+        for index in range(len(sections) - 1):
+            delta = np.mean(sections[index + 1], axis=0) - np.mean(sections[index], axis=0)
+            if float(np.linalg.norm(delta)) < min_sep:
+                raise ValueError(LENGTH_EXCEEDS_ENVELOPE_MSG)
+
     def _section_at_station(
         self,
         parameters: ScraperParameters,
@@ -94,22 +121,25 @@ class ScraperGeometryGenerator:
             bevel_run = min(thickness * 0.85, thickness / max(np.tan(bevel), 1e-6))
         else:
             bevel_run = 0.0
-        if relief > 1e-9:
-            relief_run = min(thickness * 0.5, thickness / max(np.tan(relief), 1e-6))
-        else:
-            relief_run = 0.0
 
         tip_depth = np.zeros(n_w, dtype=np.float64)
         if bevel_run > 1e-9:
             side = np.abs(np.linspace(-1.0, 1.0, n_w))
             tip_depth = bevel_run * side * 0.35
 
-        back_depth = np.full(n_w, thickness, dtype=np.float64)
-        if relief_run > 1e-9:
-            side = np.abs(np.linspace(-1.0, 1.0, n_w))
-            back_depth = thickness - relief_run * (1.0 - side) * 0.5
-
         tip_pts = tip + normals * tip_depth[:, None]
+        # Relief is a thickness-direction taper only. It must not create a
+        # second envelope-following face and must never collapse the section.
+        min_keep = max(0.4, 0.25 * thickness)
+        back_depth = np.full(n_w, thickness, dtype=np.float64)
+        if relief > 1e-9:
+            side = np.abs(np.linspace(-1.0, 1.0, n_w))
+            taper = min(
+                0.35 * thickness,
+                thickness * 0.4 * min(relief / float(np.deg2rad(45.0)), 1.0),
+            )
+            back_depth = thickness - taper * (1.0 - side)
+        back_depth = np.maximum(back_depth, tip_depth + min_keep)
         back_pts = tip + normals * back_depth[:, None]
 
         if abs(helix) > 1e-12:
@@ -168,8 +198,17 @@ class ScraperGeometryGenerator:
         _cap(0, reverse=True)
         _cap(len(sections) - 1, reverse=False)
 
+        faces_arr = np.asarray(faces, dtype=np.int64)
+        tri = vertices[faces_arr]
+        areas = 0.5 * np.linalg.norm(
+            np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]),
+            axis=1,
+        )
+        keep = areas >= ScraperGeometryGenerator._MIN_FACE_AREA_MM2
+        if not np.any(keep):
+            raise ValueError("Loft produced no faces")
         return trimesh.Trimesh(
             vertices=vertices,
-            faces=np.asarray(faces, dtype=np.int64),
+            faces=faces_arr[keep],
             process=False,
         )

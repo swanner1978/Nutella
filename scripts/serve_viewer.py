@@ -469,7 +469,14 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
                 view_dir=view_dir,
                 models_root=self.server.models_root,
                 parameters=request.parameters,
+                include_svg_overlays=request.include_svg_overlays,
             )
+            encode_started = time.perf_counter()
+            encoded = json.dumps(payload, ensure_ascii=False)
+            encode_ms = (time.perf_counter() - encode_started) * 1000.0
+            timings = payload.setdefault("timings_ms", {})
+            timings["json_encode_ms"] = round(encode_ms, 2)
+            timings["payload_bytes"] = len(encoded.encode("utf-8"))
             self._send_json(200, payload)
         except Exception as exc:
             _LOG.exception(

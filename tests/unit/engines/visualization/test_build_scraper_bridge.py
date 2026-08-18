@@ -34,6 +34,7 @@ def test_build_scraper_response_contains_scraper_overlays_only(
     payload = build_scraper_visualization_response(
         view_dir=viewer_dir,
         models_root=models_root,
+        include_svg_overlays=True,
     )
 
     assert payload["scraper"]["vertex_count"] > 0
@@ -49,6 +50,7 @@ def test_build_scraper_response_contains_scraper_overlays_only(
     assert payload["scraper_pipeline"]["stages"]["envelope_path"]["sampling"] == (
         "rigid_pose_along_envelope"
     )
+    assert payload["svg_overlays_computed"] is True
     assert "scraper-volume" in payload["overlays"]["side"]
     assert "scraper-volume" in payload["overlays"]["top"]
     assert "scraper-volume" in payload["overlays"]["bottom"]
@@ -74,10 +76,53 @@ def test_build_scraper_response_contains_scraper_overlays_only(
         assert payload["validation"]["has_collision"] is False
         assert payload["validation"]["admissible"] is True
     assert payload["collision"]["pose_status"] == payload["validation"]["pose_status"]
+    assert "timings_ms" in payload
+    assert "pose_ms" in payload["timings_ms"]
+    assert "collision_ms" in payload["timings_ms"]
+    assert "mesh_serialize_ms" in payload["timings_ms"]
+    assert payload["timings_ms"]["pose_ms"] >= 0.0
+    assert payload["timings_ms"]["collision_ms"] >= 0.0
     assert payload["validation"]["distance_min_mm"] >= 0.0
     assert payload["validation"]["penetration_mm"] >= 0.0
     assert "contact-covered" not in payload["overlays"]["side"]
     assert payload["pose"]["height_mm"] is not None
+
+
+def test_build_scraper_3d_play_path_skips_svg_overlays(viewer_dir: Path) -> None:
+    models_root = viewer_dir.parent.parent / "models"
+    colored = Path(__file__).resolve().parents[4] / "Solidworks" / "jar_color-jar.step"
+    if not colored.exists():
+        pytest.skip("Solidworks/jar_color-jar.step missing")
+
+    model_dir = models_root / viewer_dir.name
+    shutil.copy2(colored, model_dir / ModelStore.REFERENCE_STEP)
+    cache = model_dir / "interior_product_surface.npz"
+    if cache.exists():
+        cache.unlink()
+    legacy = model_dir / "interior_rgb_85_255_255.npz"
+    if legacy.exists():
+        legacy.unlink()
+
+    payload = build_scraper_visualization_response(
+        view_dir=viewer_dir,
+        models_root=models_root,
+    )
+
+    assert payload["svg_overlays_computed"] is False
+    assert payload["overlays"] == {
+        "side": {},
+        "top": {},
+        "left": {},
+        "right": {},
+        "bottom": {},
+    }
+    assert "scraper-volume" not in payload["overlays"]["side"]
+    assert "scraper-trajectory" not in payload["overlays"]["top"]
+    assert payload["timings_ms"]["overlays_ms"] < 50.0
+    assert payload["scraper_geometry"]["vertices"]
+    assert payload["scraper_transform"]
+    assert "collision" in payload
+    assert payload["collision"]["pose_status"] in {"VALID", "INVALID", "BLOCKED"}
 
 
 def test_build_interior_contour_response_uses_step_face_colors(viewer_dir: Path) -> None:

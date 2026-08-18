@@ -383,29 +383,40 @@ def build_scraper_visualization_response(
     view_dir: Path,
     models_root: Path,
     parameters: object | None = None,
+    include_svg_overlays: bool = False,
 ) -> dict[str, Any]:
     """
     Build parametric Scraper V1 from the cyan STEP interior (RGB 85,255,255).
 
     Same surface as Contour intérieur — not InternalJarSurface approximations.
+
+    The 3D viewer Play path uses ``include_svg_overlays=False`` (pose + collision
+    + rest mesh only). Legacy SVG projections still exist and run only when
+    explicitly requested.
     """
     from nutella_scraper.domain.models.scraper_parameters import ScraperParameters
     from nutella_scraper.engines.compute.interior_surface_reference import (
         load_interior_surface_reference,
     )
     from nutella_scraper.engines.compute.scraper_envelope_collision import (
+        LAST_POSE_COLLISION_MS,
         collision_payload,
         pose_rigid_scraper_admissible,
+    )
+    from nutella_scraper.engines.compute.scraper_envelope_path import (
+        apply_effective_length,
     )
     from nutella_scraper.engines.compute.scraper_rigid_motion import (
         build_rigid_scraper_artifact,
         manufacturing_fingerprint,
     )
+    from nutella_scraper.engines.visualization.scraper_control_cage import (
+        build_control_cage_overlay,
+    )
 
     view_cache = view_cache_from_viewer_dir(view_dir)
     store = ModelStore(models_root)
     store.get(view_cache.model_id)
-    internal = store.get_internal(view_cache.model_id)
     model_id = view_cache.model_id
     interior_surface = load_interior_surface_reference(
         models_root=models_root,
@@ -423,6 +434,8 @@ def build_scraper_visualization_response(
         )
         params = ScraperParameters.default().with_updates(position_z_mm=mid_height)
 
+    params, length_limit = apply_effective_length(params, interior_surface)
+
     scraper_pipeline: dict[str, Any] = {
         "loss_stage": None,
         "stages": {
@@ -435,19 +448,29 @@ def build_scraper_visualization_response(
             },
         },
     }
+    timings_ms: dict[str, float] = {}
+    server_started = time.perf_counter()
     try:
         shape_key = manufacturing_fingerprint(params, model_id=model_id)
         artifact = _RIGID_SCRAPER_CACHE.get(shape_key)
         rebuilt = False
+        artifact_started = time.perf_counter()
         if artifact is None:
             artifact = build_rigid_scraper_artifact(interior_surface, params)
             _RIGID_SCRAPER_CACHE[shape_key] = artifact
             rebuilt = True
+        timings_ms["mesh_build_or_cache_ms"] = (
+            time.perf_counter() - artifact_started
+        ) * 1000.0
+        LAST_POSE_COLLISION_MS["pose_ms"] = 0.0
+        LAST_POSE_COLLISION_MS["collision_ms"] = 0.0
         admissible = pose_rigid_scraper_admissible(
             artifact,
             interior_surface,
             params,
         )
+        timings_ms["pose_ms"] = float(LAST_POSE_COLLISION_MS.get("pose_ms", 0.0))
+        timings_ms["collision_ms"] = float(LAST_POSE_COLLISION_MS.get("collision_ms", 0.0))
         posed_mesh = admissible.posed_mesh
         pose = admissible.pose
         transform_se3 = admissible.transform
@@ -498,41 +521,74 @@ def build_scraper_visualization_response(
         scraper_pipeline["loss_stage"] = "mesh_built"
         raise
 
-    transform = pose_matrix(pose)
-    scraper_projection = ScraperResultProjector().project(
-        scraper_vertices=posed_mesh.vertices,
-        scraper_faces=posed_mesh.faces,
-        internal=internal,
+    overlay_started = time.perf_counter()
+    overlays: dict[str, dict[str, str]] = {
+        "side": {},
+        "top": {},
+        "left": {},
+        "right": {},
+        "bottom": {},
+    }
+    if include_svg_overlays:
+        internal = store.get_internal(view_cache.model_id)
+        scraper_projection = ScraperResultProjector().project(
+            scraper_vertices=posed_mesh.vertices,
+            scraper_faces=posed_mesh.faces,
+            internal=internal,
+        )
+        tip_projection = TrajectoryProjector().project(
+            positions_mm=tuple(
+                (float(p[0]), float(p[1]), float(p[2])) for p in active_edge_mm
+            ),
+            internal=internal,
+        )
+        overlay = ViewOverlayPayload(
+            model_id=view_cache.model_id,
+            profile_layers=scraper_projection.profile_layers
+            + tip_projection.profile_layers,
+            top_layers=scraper_projection.top_layers + tip_projection.top_layers,
+            left_layers=scraper_projection.left_layers + tip_projection.left_layers,
+            right_layers=scraper_projection.right_layers + tip_projection.right_layers,
+            bottom_layers=scraper_projection.bottom_layers
+            + tip_projection.bottom_layers,
+            coverage_score_display=0.0,
+        )
+        fragments = OverlayRenderer().layer_fragments(overlay)
+        overlays = {
+            "side": fragments["profile"],
+            "top": fragments["top"],
+            "left": fragments["left"],
+            "right": fragments["right"],
+            "bottom": fragments["bottom"],
+        }
+        vertex_count = scraper_projection.vertex_count
+        face_count = scraper_projection.face_count
+    else:
+        vertex_count = int(len(posed_mesh.vertices))
+        face_count = int(len(posed_mesh.faces))
+    timings_ms["overlays_ms"] = (time.perf_counter() - overlay_started) * 1000.0
+    mesh_started = time.perf_counter()
+    scraper_geometry = {
+        "vertices": np.asarray(artifact.mesh.vertices, dtype=np.float64).tolist(),
+        "faces": np.asarray(artifact.mesh.faces, dtype=np.int64).tolist(),
+    }
+    timings_ms["mesh_serialize_ms"] = (time.perf_counter() - mesh_started) * 1000.0
+    timings_ms["server_total_ms"] = (time.perf_counter() - server_started) * 1000.0
+    control_cage = build_control_cage_overlay(
+        artifact.design_path, interior_surface
     )
-    tip_projection = TrajectoryProjector().project(
-        positions_mm=tuple(
-            (float(p[0]), float(p[1]), float(p[2])) for p in active_edge_mm
-        ),
-        internal=internal,
-    )
-    overlay = ViewOverlayPayload(
-        model_id=view_cache.model_id,
-        profile_layers=scraper_projection.profile_layers + tip_projection.profile_layers,
-        top_layers=scraper_projection.top_layers + tip_projection.top_layers,
-        left_layers=scraper_projection.left_layers + tip_projection.left_layers,
-        right_layers=scraper_projection.right_layers + tip_projection.right_layers,
-        bottom_layers=scraper_projection.bottom_layers + tip_projection.bottom_layers,
-        coverage_score_display=0.0,
-    )
-    fragments = OverlayRenderer().layer_fragments(overlay)
     return {
         "model_id": view_cache.model_id,
         "parameters": params.to_dict(),
+        "length_limit": length_limit,
         "pose": pose_to_dict(pose),
         "scraper_transform": transform_se3.tolist(),
-        "scraper_geometry": {
-            "vertices": np.asarray(artifact.mesh.vertices, dtype=np.float64).tolist(),
-            "faces": np.asarray(artifact.mesh.faces, dtype=np.int64).tolist(),
-        },
+        "scraper_geometry": scraper_geometry,
+        "control_cage": control_cage,
         "scraper_pipeline": scraper_pipeline,
         "scraper": {
-            "vertex_count": scraper_projection.vertex_count,
-            "face_count": scraper_projection.face_count,
+            "vertex_count": vertex_count,
+            "face_count": face_count,
             "provenance": "parametric_v1_rigid_pose",
             "interior_source": interior_surface.source,
             "rigid_geometry": True,
@@ -544,13 +600,9 @@ def build_scraper_visualization_response(
         },
         "validation": envelope_validation,
         "collision": envelope_validation,
-        "overlays": {
-            "side": fragments["profile"],
-            "top": fragments["top"],
-            "left": fragments["left"],
-            "right": fragments["right"],
-            "bottom": fragments["bottom"],
-        },
+        "overlays": overlays,
+        "svg_overlays_computed": include_svg_overlays,
+        "timings_ms": {key: round(value, 2) for key, value in timings_ms.items()},
     }
 
 
@@ -625,7 +677,6 @@ def build_viewer_scene_response(
             **_compact_mesh_payload(
                 interior.vertices,
                 faces=interior.faces,
-                edges=_unique_edges(interior.faces),
             ),
             "source": interior.source,
             "matching_face_count": interior.matching_face_count,
@@ -643,7 +694,6 @@ def build_viewer_scene_response(
             **_compact_mesh_payload(
                 jar_vertices,
                 faces=jar_faces,
-                edges=_unique_edges(jar_faces),
             ),
             "source": "visual.stl",
         },

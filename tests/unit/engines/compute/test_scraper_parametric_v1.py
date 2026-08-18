@@ -14,19 +14,20 @@ from nutella_scraper.engines.compute.interior_surface_reference import (
     SOURCE_INTERIOR_PRODUCT_SURFACE,
     InteriorSurfaceReference,
 )
+from nutella_scraper.engines.compute.scraper_envelope_collision import (
+    evaluate_envelope_collision,
+    pose_rigid_scraper_admissible,
+)
 from nutella_scraper.engines.compute.scraper_envelope_path import (
     NUMERIC_GAP_MM,
     ScraperEnvelopePathBuilder,
     assert_no_inverted_station_pairs,
+    jar_longitudinal_limits,
     normalize_row_orders,
     prefers_flipped_order,
 )
 from nutella_scraper.engines.compute.scraper_geometry_generator import (
     ScraperGeometryGenerator,
-)
-from nutella_scraper.engines.compute.scraper_envelope_collision import (
-    evaluate_envelope_collision,
-    pose_rigid_scraper_admissible,
 )
 from nutella_scraper.engines.compute.scraper_placement_calculator import (
     ScraperPlacementCalculator,
@@ -260,16 +261,36 @@ def test_interior_side_validation_rejects_glass_penetration() -> None:
 
 
 def test_z_rebuilds_trajectory() -> None:
+    """Length is anchored at the opening; position_z is not the loft origin."""
     surface = _tapered(r0=40.0, slope=0.2)
-    low = _profile_a(position_z_mm=30.0, length_mm=40.0)
-    high = _profile_a(position_z_mm=70.0, length_mm=40.0)
-    path_low, _, _ = _build(low, surface)
-    path_high, _, _ = _build(high, surface)
-    assert float(np.mean(path_low.wall_curve_mm[:, 1])) < 45.0
-    assert float(np.mean(path_high.wall_curve_mm[:, 1])) > 55.0
-    r_low = float(np.mean(np.hypot(path_low.wall_curve_mm[:, 0], path_low.wall_curve_mm[:, 2])))
-    r_high = float(np.mean(np.hypot(path_high.wall_curve_mm[:, 0], path_high.wall_curve_mm[:, 2])))
-    assert r_high > r_low + 3.0
+    low = _profile_a(position_z_mm=62.0, length_mm=18.0)
+    high = _profile_a(position_z_mm=88.0, length_mm=18.0)
+    path_low = ScraperEnvelopePathBuilder().build(surface, low)
+    path_high = ScraperEnvelopePathBuilder().build(surface, high)
+    assert np.allclose(path_low.wall_curve_mm, path_high.wall_curve_mm, atol=0.2)
+    _median_y, opening_y = jar_longitudinal_limits(surface)
+    wall = path_low.wall_curve_mm
+    assert float(np.max(wall[:, 1])) >= opening_y - 2.0
+    assert float(np.min(wall[:, 1])) > opening_y - 25.0
+
+
+def test_length_grows_down_the_taper() -> None:
+    surface = _tapered(r0=40.0, slope=0.2)
+    short = _profile_a(length_mm=18.0)
+    long = _profile_a(length_mm=40.0)
+    path_short = ScraperEnvelopePathBuilder().build(surface, short)
+    path_long = ScraperEnvelopePathBuilder().build(surface, long)
+    assert float(np.min(path_long.wall_curve_mm[:, 1])) < float(
+        np.min(path_short.wall_curve_mm[:, 1])
+    ) - 10.0
+    r_short = float(
+        np.mean(np.hypot(path_short.wall_curve_mm[:, 0], path_short.wall_curve_mm[:, 2]))
+    )
+    r_long = float(
+        np.mean(np.hypot(path_long.wall_curve_mm[:, 0], path_long.wall_curve_mm[:, 2]))
+    )
+    # Longer blade reaches lower (narrower) stations on the taper.
+    assert r_short > r_long + 1.0
 
 
 def test_surface_progress_rigid_pose_no_rebuild() -> None:
@@ -327,9 +348,10 @@ def test_rotation_45() -> None:
     areas = np.asarray(posed.area_faces, dtype=np.float64)
     assert float(np.min(areas)) >= ScraperGeometryGenerator._MIN_FACE_AREA_MM2
     assert bool(posed.is_winding_consistent)
-    tip = posed.vertices[np.argsort(np.hypot(posed.vertices[:, 0], posed.vertices[:, 2]))[-1]]
-    # At 45°, tip should leave the +X axis dominance of 0°.
-    assert abs(float(tip[2])) > 5.0
+    # 45° progress leaves the +X wall; use the outer cloud, not one vertex.
+    radii = np.hypot(posed.vertices[:, 0], posed.vertices[:, 2])
+    outer = posed.vertices[radii >= np.quantile(radii, 0.85)]
+    assert float(np.mean(np.abs(outer[:, 2]))) > 5.0
     report = evaluate_envelope_collision(posed, surface, params)
     assert report.admissible
     assert not report.has_collision
@@ -463,7 +485,7 @@ def test_admissible_search_does_not_reshape() -> None:
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("width_mm", 28.0), ("length_mm", 80.0), ("thickness_mm", 6.0)],
+    [("width_mm", 28.0), ("length_mm", 25.0), ("thickness_mm", 6.0)],
 )
 def test_dimensions_rebuild_from_surface(field: str, value: float) -> None:
     surface = _cylinder(50.0)
@@ -527,7 +549,11 @@ def test_real_interior_product_surface_if_available() -> None:
     gap = ScraperPlacementCalculator.active_tip_gap_mm(posed, surface)
     assert gap == pytest.approx(NUMERIC_GAP_MM, abs=0.5)
     mesh = surface.to_trimesh()
-    wall = path.wall_curve_mm
+    _median_y, opening_y = jar_longitudinal_limits(surface)
+    wall = np.asarray(
+        [row for row in path.wall_curve_mm if float(row[1]) <= opening_y + 1e-6],
+        dtype=np.float64,
+    )
     dists = mesh.nearest.on_surface(wall)[1]
     assert float(np.mean(dists)) < 0.35
     # Top-view samples must not collapse to a single radius (generic circle).
