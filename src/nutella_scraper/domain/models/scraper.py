@@ -35,6 +35,22 @@ class ScraperGeometry:
 
 
 @dataclass(frozen=True)
+class ScraperShape:
+    """Immutable intrinsic blade. Mesh fields stay None until materialized.
+
+    A pose may transform these points; it must never rewrite them.
+    """
+
+    fingerprint: str
+    control_points_mm: tuple[tuple[float, float, float], ...]
+    thickness_mm: float = 2.5
+    width_mm: float = 2.5
+    length_mm: float = 0.0
+    vertices: tuple[tuple[float, float, float], ...] | None = None
+    faces: tuple[tuple[int, int, int], ...] | None = None
+
+
+@dataclass(frozen=True)
 class ScraperPose:
     """Placement of a scraper geometry inside the jar frame."""
 

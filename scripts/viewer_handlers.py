@@ -7,10 +7,15 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from nutella_scraper.engines.visualization.viewer_bridge import build_contact_visualization_response
 from scripts.viewer_api import (
+    BuildScraperRequest,
+    ScraperShapeCandidatesRequest,
     SimulateContactRequest,
     validate_simulate_contact_response,
+)
+
+from nutella_scraper.engines.visualization.viewer_bridge import (
+    build_contact_visualization_response,
 )
 
 _LOG = logging.getLogger("nutella_scraper.serve_viewer")
@@ -65,3 +70,17 @@ def read_build_scraper_request(raw_body: bytes) -> BuildScraperRequest:
         return BuildScraperRequest.from_dict(parse_json_body(raw_body))
     except json.JSONDecodeError as exc:
         raise ValueError(f"Corps JSON invalide pour /api/build-scraper : {exc}") from exc
+
+
+def read_scraper_shape_candidates_request(raw_body: bytes) -> ScraperShapeCandidatesRequest:
+    """Parse POST /api/scraper-shape-candidates JSON body."""
+    from scripts.viewer_api import ScraperShapeCandidatesRequest, parse_json_body
+
+    if not raw_body:
+        return ScraperShapeCandidatesRequest()
+    try:
+        return ScraperShapeCandidatesRequest.from_dict(parse_json_body(raw_body))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Corps JSON invalide pour /api/scraper-shape-candidates : {exc}"
+        ) from exc

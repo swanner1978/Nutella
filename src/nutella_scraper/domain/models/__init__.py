@@ -31,7 +31,7 @@ from nutella_scraper.domain.models.design_space import (
     ParameterSample,
     ParameterType,
 )
-from nutella_scraper.domain.models.scraper import ScraperGeometry, ScraperPose
+from nutella_scraper.domain.models.scraper import ScraperGeometry, ScraperPose, ScraperShape
 from nutella_scraper.domain.models.views import (
     ProjectedView,
     ProjectionMetadata,
@@ -70,6 +70,7 @@ __all__ = [
     "RigidTransform",
     "ScraperGeometry",
     "ScraperPose",
+    "ScraperShape",
     "SvgLayer",
     "TrajectoryConfig",
     "ViewOverlayPayload",

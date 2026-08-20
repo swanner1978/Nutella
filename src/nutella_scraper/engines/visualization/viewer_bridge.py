@@ -606,6 +606,86 @@ def build_scraper_visualization_response(
     }
 
 
+def build_scraper_shape_candidates_response(
+    *,
+    view_dir: Path,
+    models_root: Path,
+    count: int = 100,
+) -> dict[str, Any]:
+    """Lightweight admissible-curve catalog. Candidate 0 is scraper A.
+
+    Does not run collision, Play, or mesh generation for each candidate.
+    """
+    from nutella_scraper.domain.models.scraper_parameters import ScraperParameters
+    from nutella_scraper.engines.compute.interior_surface_reference import (
+        load_interior_surface_reference,
+    )
+    from nutella_scraper.engines.compute.scraper_envelope_path import (
+        apply_effective_length,
+    )
+    from nutella_scraper.engines.compute.scraper_rigid_motion import (
+        build_rigid_scraper_artifact,
+        manufacturing_fingerprint,
+    )
+    from nutella_scraper.engines.visualization.scraper_control_cage import (
+        build_control_cage_overlay,
+    )
+    from nutella_scraper.engines.visualization.scraper_shape_space import (
+        DEFAULT_CANDIDATE_COUNT,
+        MAX_CANDIDATE_SHAPES,
+        generate_candidate_shapes,
+        lattice_from_cage,
+    )
+
+    view_cache = view_cache_from_viewer_dir(view_dir)
+    store = ModelStore(models_root)
+    store.get(view_cache.model_id)
+    interior_surface = load_interior_surface_reference(
+        models_root=models_root,
+        model_id=view_cache.model_id,
+        step_path=models_root / view_cache.model_id / ModelStore.REFERENCE_STEP,
+    )
+    params = ScraperParameters.from_dict(
+        {
+            "width_mm": 2.5,
+            "thickness_mm": 2.5,
+            "length_mm": 10000,
+            "clearance_mm": 0.0,
+            "bevel_angle_deg": 0.0,
+            "relief_angle_deg": 0.0,
+            "helix_rate_deg_per_mm": 0.0,
+            "rotation_angle_deg": 0.0,
+        }
+    )
+    params, _length_limit = apply_effective_length(params, interior_surface)
+    shape_key = manufacturing_fingerprint(params, model_id=view_cache.model_id)
+    artifact = _RIGID_SCRAPER_CACHE.get(shape_key)
+    if artifact is None:
+        artifact = build_rigid_scraper_artifact(interior_surface, params)
+        _RIGID_SCRAPER_CACHE[shape_key] = artifact
+    cage = build_control_cage_overlay(artifact.design_path, interior_surface)
+    lattice = lattice_from_cage(cage, interior_surface)
+    n = int(np.clip(int(count), 1, MAX_CANDIDATE_SHAPES))
+    candidates = generate_candidate_shapes(
+        lattice, count=n or DEFAULT_CANDIDATE_COUNT
+    )
+    return {
+        "model_id": view_cache.model_id,
+        "count": len(candidates),
+        "max_count": MAX_CANDIDATE_SHAPES,
+        "station_count": lattice.station_count,
+        "row_count": lattice.row_count,
+        "center_row_index": lattice.center_row_index,
+        "contact_tolerance_mm": lattice.contact_tolerance_mm,
+        "max_row_step": 1,
+        "blade_thickness_mm": 2.5,
+        "blade_width_mm": 2.5,
+        "reference_candidate_id": candidates[0].candidate_id if candidates else None,
+        "candidates": [item.to_dict() for item in candidates],
+        "has_meshes": False,
+    }
+
+
 def _compact_mesh_payload(
     vertices: np.ndarray,
     *,

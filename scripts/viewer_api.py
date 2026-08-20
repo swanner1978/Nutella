@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 API_IMPORT_STEP = "/api/import-step"
 API_SIMULATE_CONTACT = "/api/simulate-contact"
 API_BUILD_SCRAPER = "/api/build-scraper"
+API_SCRAPER_SHAPE_CANDIDATES = "/api/scraper-shape-candidates"
 API_INTERIOR_CONTOUR = "/api/interior-contour"
 API_DEBUG_STEP_FACE_COLORS = "/api/debug-step-face-colors"
 API_SIMULATIONS = "/api/simulations"
@@ -21,6 +22,7 @@ VIEWER_POST_ENDPOINTS: tuple[str, ...] = (
     API_IMPORT_STEP,
     API_SIMULATE_CONTACT,
     API_BUILD_SCRAPER,
+    API_SCRAPER_SHAPE_CANDIDATES,
     API_INTERIOR_CONTOUR,
     API_DEBUG_STEP_FACE_COLORS,
 )
@@ -61,6 +63,29 @@ class BuildScraperRequest:
             model_id=None if model_id is None else str(model_id),
             parameters=parameters,
             include_svg_overlays=payload.get("include_svg_overlays") is True,
+        )
+
+
+@dataclass(frozen=True)
+class ScraperShapeCandidatesRequest:
+    """Optional body for POST /api/scraper-shape-candidates."""
+
+    model_id: str | None = None
+    count: int = 100
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any] | None) -> ScraperShapeCandidatesRequest:
+        if not payload:
+            return cls()
+        model_id = payload.get("model_id")
+        raw_count = payload.get("count", 100)
+        try:
+            count = int(raw_count)
+        except (TypeError, ValueError):
+            count = 100
+        return cls(
+            model_id=None if model_id is None else str(model_id),
+            count=count,
         )
 
 

@@ -634,11 +634,20 @@
         border-bottom: 1px solid var(--border-soft);
         background: #050505;
       }
-      .view-toolbar label {
-        color: #888;
-        font-size: 0.72rem;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+      .view-toolbar .toggle {
+        margin: 0;
+        text-transform: none;
+        letter-spacing: 0;
+        color: #ccc;
+        font-size: 0.78rem;
+      }
+      .scraper-view-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .scraper-view-controls[hidden] {
+        display: none;
       }
       .view-toolbar select {
         min-width: 11rem;
@@ -686,6 +695,42 @@
       }
       .viewcube-canvas[hidden] {
         display: none;
+      }
+      .candidate-navigator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-left: auto;
+        padding: 0.22rem 0.4rem;
+        border: 1px solid #5a5a5a;
+        border-radius: 6px;
+        background: #1f1f1f;
+        color: #f3f3f3;
+        font-size: 0.82rem;
+        pointer-events: auto;
+      }
+      .candidate-navigator[hidden] {
+        display: none;
+      }
+      .candidate-navigator button {
+        min-width: 2.1rem;
+        height: 1.85rem;
+        border: 1px solid #5a5a5a;
+        border-radius: 4px;
+        background: #2a2a2a;
+        color: #ffffff;
+        cursor: pointer;
+        font-size: 0.95rem;
+      }
+      .candidate-navigator button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .candidate-navigator-label {
+        min-width: 14.5rem;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
       .view-viewport {
         position: absolute;
@@ -1132,14 +1177,33 @@
                 <option value="right">Vue droite</option>
                 <option value="iso">Vue isométrique</option>
               </select>
-              <label class="toggle" title="Afficher le repère 3D gradué (10 mm)">
+              <label class="toggle" id="toggle-coordinate-frame-label" title="Afficher le repère 3D gradué (10 mm)">
                 <input type="checkbox" id="toggle-coordinate-frame" data-layer-toggle="coordinate-frame" checked />
                 Repère
               </label>
-              <label class="toggle" title="Afficher le scraper paramétrique">
+              <label class="toggle" id="toggle-scene-scraper-label" title="Afficher le scraper paramétrique">
                 <input type="checkbox" id="toggle-scene-scraper" data-visibility-toggle="scraper" />
                 Scraper
               </label>
+              <div class="scraper-view-controls" id="scraper-view-controls" hidden>
+                <label class="toggle" title="Afficher la cage et ses points de contrôle">
+                  <input type="checkbox" id="toggle-scraper-cues" checked />
+                  Repères
+                </label>
+                <label class="toggle" title="Afficher le pot visual.stl (référence visuelle uniquement)">
+                  <input type="checkbox" id="toggle-scraper-pot" />
+                  Pot de Nutella
+                </label>
+                <label class="toggle" title="Lisser la ligne jaune sans déplacer les points de contrôle">
+                  <input type="checkbox" id="toggle-scraper-smoothing" />
+                  Lissage
+                </label>
+              </div>
+              <div class="candidate-navigator" id="candidate-navigator" hidden>
+                <button id="candidate-prev" type="button" aria-label="Candidat précédent">←</button>
+                <span class="candidate-navigator-label" id="candidate-label">Candidat A0 · 1 / 1</span>
+                <button id="candidate-next" type="button" aria-label="Candidat suivant">→</button>
+              </div>
             </div>
             <section class="view-column">
               <div class="view-label" id="active-view-label" hidden></div>
@@ -1254,6 +1318,7 @@
         ready: false,
         loadError: null,
         controlCage: null,
+        candidateCurve: null,
       };
       const ISO_ELEVATION_LIMIT = 1.35;
       const ISO_ORBIT_SENSITIVITY = 0.008;
@@ -1270,6 +1335,7 @@
         importStep: "/api/import-step",
         simulateContact: "/api/simulate-contact",
         buildScraper: "/api/build-scraper",
+        scraperShapeCandidates: "/api/scraper-shape-candidates",
         interiorContour: "/api/interior-contour",
         viewerScene: "/api/viewer-scene",
         runtime: "/api/runtime",
@@ -1331,7 +1397,23 @@
         rotation_angle_deg: 0,
       };
       let scraperSoloMode = false;
+      const CANDIDATE_FAMILY_LABELS = {
+        A0: "référence",
+        parallel: "parallèle",
+        inclined: "inclinée",
+        s_curve: "S",
+        asymmetric: "asymétrique",
+        progressive: "progressive",
+        combined: "combinée",
+      };
       let scraperSoloPrevLayers = null;
+      let scraperSoloRestMesh = null;
+      const CANDIDATE_CATALOG_SIZE = 100;
+      /** @type {Map<number, object>} */
+      const candidateCache = new Map();
+      let candidateCatalogCount = 0;
+      let candidateCatalogLoaded = false;
+      let candidateIndex = 0;
       const ROTATION_CACHE_PARAM_KEYS = [
         "width_mm",
         "length_mm",
@@ -2241,9 +2323,41 @@
         applyLayerVisibility();
       }
 
+      function setScraperViewChrome(active) {
+        const frameLabel = document.getElementById("toggle-coordinate-frame-label");
+        const scraperLabel = document.getElementById("toggle-scene-scraper-label");
+        const controls = document.getElementById("scraper-view-controls");
+        const cuesToggle = document.getElementById("toggle-scraper-cues");
+        const potToggle = document.getElementById("toggle-scraper-pot");
+        const smoothToggle = document.getElementById("toggle-scraper-smoothing");
+        if (frameLabel) frameLabel.hidden = Boolean(active);
+        if (scraperLabel) scraperLabel.hidden = Boolean(active);
+        if (controls) controls.hidden = !active;
+        if (toolbarScraperPanel) {
+          toolbarScraperPanel.title = active
+            ? "Quitter la vue Scraper"
+            : "Vue scraper A + cage de contrôle";
+        }
+        if (active) {
+          if (cuesToggle) cuesToggle.checked = true;
+          if (potToggle) potToggle.checked = false;
+          if (smoothToggle) smoothToggle.checked = false;
+        }
+      }
+
+      function onScraperViewDisplayToggle() {
+        scene3d.staticCache = null;
+        redrawCameraView();
+      }
+
       function exitScraperSoloView() {
         scraperSoloMode = false;
         if (toolbarScraperPanel) toolbarScraperPanel.dataset.active = "false";
+        const nav = document.getElementById("candidate-navigator");
+        if (nav) nav.hidden = true;
+        scene3d.candidateCurve = null;
+        if (scraperSoloRestMesh) scene3d.scraperRest = scraperSoloRestMesh;
+        setScraperViewChrome(false);
         setScraperSoloLayers(false);
         redrawCameraView();
       }
@@ -2260,6 +2374,10 @@
         stopRotationPlay();
         scraperSoloMode = true;
         if (toolbarScraperPanel) toolbarScraperPanel.dataset.active = "true";
+        const nav = document.getElementById("candidate-navigator");
+        if (nav) nav.hidden = false;
+        syncCandidateNavigator();
+        setScraperViewChrome(true);
         setScraperSoloLayers(true);
         switchView("iso");
         const current = readScraperParametersFromForm();
@@ -2268,9 +2386,127 @@
         const result = await buildScraperOnly(parameters);
         scene3d.controlCage = result.control_cage ?? null;
         scene3d.scraperTransform = null;
+        scraperSoloRestMesh = scene3d.scraperRest;
+        cacheReferenceCandidate(result);
+        applyCachedCandidate(0);
         setStatus("Scraper A + cage de contrôle", "ready");
         redrawCameraView();
         return result;
+      }
+
+      function cacheReferenceCandidate(result) {
+        const cage = result?.control_cage || {};
+        const center = cage.centerline_mm || [];
+        candidateCache.set(0, {
+          candidate_id: "A0",
+          index: 0,
+          control_points_mm: center,
+          row_indices: Array(center.length).fill(cage.center_row_index ?? 5),
+          curve_length_mm: null,
+          thickness_mm: 2.5,
+          width_mm: 2.5,
+          family: "A0",
+          shape_fingerprint: result?.scraper_pipeline?.stages?.mesh_built?.shape_fingerprint ?? "A0",
+          has_mesh: true,
+          scraper_geometry: result?.scraper_geometry ?? null,
+          is_reference_a: true,
+        });
+        candidateIndex = 0;
+        if (!candidateCatalogLoaded) candidateCatalogCount = 1;
+        const nav = document.getElementById("candidate-navigator");
+        if (nav) nav.hidden = false;
+        syncCandidateNavigator();
+      }
+
+      async function loadShapeCandidateCatalog() {
+        if (!currentModelId) return;
+        const nav = document.getElementById("candidate-navigator");
+        if (candidateCatalogCount > 1 && candidateCache.size > 1) {
+          candidateCatalogLoaded = true;
+          if (nav) nav.hidden = false;
+          syncCandidateNavigator();
+          return;
+        }
+        const response = await fetch(API.scraperShapeCandidates, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model_id: currentModelId,
+            count: CANDIDATE_CATALOG_SIZE,
+          }),
+          cache: "no-store",
+        });
+        const payload = await readJsonResponse(response);
+        if (!response.ok) {
+          throw new Error(formatServerError(payload, `Échec candidats (${response.status})`));
+        }
+        const items = Array.isArray(payload.candidates) ? payload.candidates : [];
+        candidateCatalogCount = items.length || 1;
+        items.forEach((item, index) => {
+          if (index === 0) {
+            const previous = candidateCache.get(0) || {};
+            candidateCache.set(0, { ...item, ...previous, index: 0, is_reference_a: true });
+            return;
+          }
+          if (!candidateCache.has(index)) candidateCache.set(index, item);
+        });
+        candidateCatalogLoaded = true;
+        if (nav) nav.hidden = false;
+        syncCandidateNavigator();
+      }
+
+      function formatCandidateFamily(family) {
+        if (!family) return "";
+        return CANDIDATE_FAMILY_LABELS[family] || String(family);
+      }
+
+      function syncCandidateNavigator() {
+        const total = Math.max(1, candidateCatalogCount || candidateCache.size || 1);
+        const cached = candidateCache.get(candidateIndex) || {};
+        const id = cached.candidate_id
+          || (candidateIndex === 0 ? "A0" : `S${String(candidateIndex).padStart(4, "0")}`);
+        const family = formatCandidateFamily(cached.family);
+        const label = document.getElementById("candidate-label");
+        if (label) {
+          label.textContent = family
+            ? `Candidat ${id} · ${candidateIndex + 1} / ${total} · ${family}`
+            : `Candidat ${id} · ${candidateIndex + 1} / ${total}`;
+        }
+        const prev = document.getElementById("candidate-prev");
+        const next = document.getElementById("candidate-next");
+        if (prev) prev.disabled = candidateIndex <= 0;
+        if (next) {
+          next.disabled = candidateCatalogLoaded && candidateIndex >= total - 1;
+        }
+      }
+
+      function applyCachedCandidate(index) {
+        const total = Math.max(1, candidateCatalogCount || candidateCache.size || 1);
+        const nextIndex = Math.max(0, Math.min(total - 1, index));
+        const cached = candidateCache.get(nextIndex);
+        if (!cached) return;
+        candidateIndex = nextIndex;
+        scene3d.candidateCurve = cached.control_points_mm || null;
+        if (cached.is_reference_a && (cached.scraper_geometry || scraperSoloRestMesh)) {
+          scene3d.scraperRest = cached.scraper_geometry
+            ? flattenMesh(cached.scraper_geometry)
+            : scraperSoloRestMesh;
+        } else {
+          scene3d.scraperRest = null;
+        }
+        scene3d.scraperTransform = null;
+        syncCandidateNavigator();
+        redrawCameraView();
+      }
+
+      async function stepShapeCandidate(delta) {
+        const target = candidateIndex + delta;
+        if (delta > 0 && !candidateCatalogLoaded) {
+          setStatus("Génération des formes admissibles…", "loading");
+          await loadShapeCandidateCatalog();
+          setStatus("Formes admissibles prêtes", "ready");
+        }
+        applyCachedCandidate(target);
       }
 
       async function buildScraperOnly(parametersOverride = null) {
@@ -2776,6 +3012,15 @@
         scene3d.scraperRest = null;
         scene3d.scraperTransform = null;
         scene3d.controlCage = null;
+        scene3d.candidateCurve = null;
+        candidateCache.clear();
+        candidateCatalogCount = 0;
+        candidateCatalogLoaded = false;
+        candidateIndex = 0;
+        scraperSoloRestMesh = null;
+        setScraperViewChrome(false);
+        const nav = document.getElementById("candidate-navigator");
+        if (nav) nav.hidden = true;
         scene3d.collision = false;
         scene3d.canvas = null;
         scene3d.staticCache = null;
@@ -3772,8 +4017,16 @@
           ctx.beginPath();
           let started = false;
           for (let i = 0; i < line.length; i += 1) {
-            const p = projectPoint(line[i][0], line[i][1], line[i][2], camera);
-            if (p.depth <= 0.01) continue;
+            const pt = line[i];
+            if (!pt || pt.length < 3) {
+              started = false;
+              continue;
+            }
+            const p = projectPoint(pt[0], pt[1], pt[2], camera);
+            if (p.depth <= 0.01) {
+              started = false;
+              continue;
+            }
             if (!started) {
               ctx.moveTo(p.x, p.y);
               started = true;
@@ -3804,6 +4057,7 @@
           const isCenter = index === centerIdx;
           const radius = isCenter ? 2.6 : 1.6;
           for (const point of line || []) {
+            if (!point || point.length < 3) continue;
             const p = projectPoint(point[0], point[1], point[2], camera);
             if (p.depth <= 0.01) continue;
             ctx.beginPath();
@@ -3816,6 +4070,127 @@
             ctx.stroke();
           }
         });
+        ctx.globalAlpha = 1;
+      }
+
+      function pchipSlopes(t, values) {
+        const n = values.length;
+        const h = new Array(n - 1);
+        const delta = new Array(n - 1);
+        for (let i = 0; i < n - 1; i += 1) {
+          h[i] = t[i + 1] - t[i];
+          delta[i] = (values[i + 1] - values[i]) / h[i];
+        }
+        const m = new Array(n);
+        m[0] = delta[0];
+        m[n - 1] = delta[n - 2];
+        for (let i = 1; i < n - 1; i += 1) {
+          if (delta[i - 1] * delta[i] <= 0) {
+            m[i] = 0;
+          } else {
+            const w1 = 2 * h[i] + h[i - 1];
+            const w2 = h[i] + 2 * h[i - 1];
+            m[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i]);
+          }
+        }
+        for (let i = 0; i < n - 1; i += 1) {
+          if (delta[i] === 0) {
+            m[i] = 0;
+            m[i + 1] = 0;
+            continue;
+          }
+          const a = m[i] / delta[i];
+          const b = m[i + 1] / delta[i];
+          const s2 = a * a + b * b;
+          if (s2 > 9) {
+            const tau = 3 / Math.sqrt(s2);
+            m[i] = tau * a * delta[i];
+            m[i + 1] = tau * b * delta[i];
+          }
+        }
+        return m;
+      }
+
+      function hermiteScalar(y0, y1, m0, m1, h, s) {
+        const s2 = s * s;
+        const s3 = s2 * s;
+        return (
+          (2 * s3 - 3 * s2 + 1) * y0 +
+          (s3 - 2 * s2 + s) * h * m0 +
+          (-2 * s3 + 3 * s2) * y1 +
+          (s3 - s2) * h * m1
+        );
+      }
+
+      function smoothContactCurve(points, samplesPerSeg = 8) {
+        const src = Array.isArray(points) ? points : [];
+        const n = src.length;
+        if (n < 3) {
+          return src.map((p) => [p[0], p[1], p[2]]);
+        }
+        const t = [0];
+        for (let i = 1; i < n; i += 1) {
+          const dx = src[i][0] - src[i - 1][0];
+          const dy = src[i][1] - src[i - 1][1];
+          const dz = src[i][2] - src[i - 1][2];
+          t.push(t[i - 1] + Math.max(Math.hypot(dx, dy, dz), 1e-9));
+        }
+        const xs = src.map((p) => p[0]);
+        const ys = src.map((p) => p[1]);
+        const zs = src.map((p) => p[2]);
+        const mx = pchipSlopes(t, xs);
+        const my = pchipSlopes(t, ys);
+        const mz = pchipSlopes(t, zs);
+        const out = [];
+        for (let i = 0; i < n - 1; i += 1) {
+          const h = t[i + 1] - t[i];
+          const startK = i === 0 ? 0 : 1;
+          for (let k = startK; k <= samplesPerSeg; k += 1) {
+            const s = k / samplesPerSeg;
+            out.push([
+              hermiteScalar(xs[i], xs[i + 1], mx[i], mx[i + 1], h, s),
+              hermiteScalar(ys[i], ys[i + 1], my[i], my[i + 1], h, s),
+              hermiteScalar(zs[i], zs[i + 1], mz[i], mz[i + 1], h, s),
+            ]);
+          }
+        }
+        return out;
+      }
+
+      function drawCandidateContactCurve(ctx, curve, camera) {
+        if (!curve || curve.length < 2) return;
+        const path = document.getElementById("toggle-scraper-smoothing")?.checked
+          ? smoothContactCurve(curve)
+          : curve;
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < path.length; i += 1) {
+          const p = projectPoint(path[i][0], path[i][1], path[i][2], camera);
+          if (p.depth <= 0.01) continue;
+          if (!started) {
+            ctx.moveTo(p.x, p.y);
+            started = true;
+          } else {
+            ctx.lineTo(p.x, p.y);
+          }
+        }
+        if (!started) return;
+        ctx.globalAlpha = 0.95;
+        ctx.strokeStyle = "#ffe566";
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+        for (const point of curve) {
+          const p = projectPoint(point[0], point[1], point[2], camera);
+          if (p.depth <= 0.01) continue;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = "#ffe566";
+          ctx.fill();
+          ctx.lineWidth = 0.7;
+          ctx.strokeStyle = "#1a1a1a";
+          ctx.stroke();
+        }
         ctx.globalAlpha = 1;
       }
 
@@ -3880,15 +4255,15 @@
           setViewCubeVisible(false);
           return;
         }
-        const bounds = scraperSoloMode && scene3d.scraperRest
-          ? meshBounds(scene3d.scraperRest)
+        const bounds = scraperSoloMode && (scene3d.scraperRest || scraperSoloRestMesh)
+          ? meshBounds(scene3d.scraperRest || scraperSoloRestMesh)
           : scene3d.jar
           ? meshBounds(scene3d.jar)
           : { min: [-40, 0, -40], max: [40, 80, 40] };
         const camera = cameraFromPreset(preset, width, height, bounds);
-        const showPot =
-          !scraperSoloMode &&
-          document.querySelector('[data-visibility-toggle="pot"]')?.checked !== false;
+        const showPot = scraperSoloMode
+          ? document.getElementById("toggle-scraper-pot")?.checked === true
+          : document.querySelector('[data-visibility-toggle="pot"]')?.checked !== false;
         const showScraper = scraperFrameToggle
           ? scraperFrameToggle.checked
           : document.querySelector('#sidebar-accordions [data-visibility-toggle="scraper"]')?.checked === true;
@@ -3971,8 +4346,15 @@
           }
         }
         ctx.globalAlpha = 1;
-        if (scraperSoloMode && scene3d.controlCage) {
+        if (
+          scraperSoloMode &&
+          scene3d.controlCage &&
+          document.getElementById("toggle-scraper-cues")?.checked !== false
+        ) {
           drawControlCageOverlay(ctx, scene3d.controlCage, camera);
+        }
+        if (scraperSoloMode && scene3d.candidateCurve) {
+          drawCandidateContactCurve(ctx, scene3d.candidateCurve, camera);
         }
         setViewCubeVisible(true);
         drawViewCube();
@@ -4805,6 +5187,30 @@
           setStatus(error.message.split("\n")[0], "error");
         });
       });
+      document.getElementById("candidate-prev")?.addEventListener("click", () => {
+        if (!scraperSoloMode) return;
+        stepShapeCandidate(-1).catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      document.getElementById("candidate-next")?.addEventListener("click", () => {
+        if (!scraperSoloMode) return;
+        stepShapeCandidate(1).catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
+      });
+      document.getElementById("toggle-scraper-cues")?.addEventListener(
+        "change",
+        onScraperViewDisplayToggle,
+      );
+      document.getElementById("toggle-scraper-pot")?.addEventListener(
+        "change",
+        onScraperViewDisplayToggle,
+      );
+      document.getElementById("toggle-scraper-smoothing")?.addEventListener(
+        "change",
+        onScraperViewDisplayToggle,
+      );
       scraperRecalculateButton?.addEventListener("click", () => {
         buildScraperOnly().catch((error) => {
           setStatus(error.message.split("\n")[0], "error");

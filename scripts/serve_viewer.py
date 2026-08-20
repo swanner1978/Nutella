@@ -45,6 +45,7 @@ from scripts.viewer_api import (  # noqa: E402
     API_IMPORT_STEP,
     API_INTERIOR_CONTOUR,
     API_RUNTIME,
+    API_SCRAPER_SHAPE_CANDIDATES,
     API_SIMULATE_CONTACT,
     API_SIMULATIONS,
     API_VIEWER_SCENE,
@@ -58,6 +59,7 @@ from scripts.viewer_api import (  # noqa: E402
 )
 from scripts.viewer_handlers import (  # noqa: E402
     read_build_scraper_request,
+    read_scraper_shape_candidates_request,
     read_simulate_contact_request,
     read_viewer_model_request,
 )
@@ -74,6 +76,7 @@ from nutella_scraper.engines.visualization.pose_visualization import (  # noqa: 
 from nutella_scraper.engines.visualization.viewer_bridge import (  # noqa: E402
     build_debug_step_face_colors_response,
     build_interior_contour_response,
+    build_scraper_shape_candidates_response,
     build_scraper_visualization_response,
     build_viewer_scene_response,
 )
@@ -247,6 +250,9 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
                 return
             if path == API_BUILD_SCRAPER:
                 self._handle_build_scraper(request_id)
+                return
+            if path == API_SCRAPER_SHAPE_CANDIDATES:
+                self._handle_scraper_shape_candidates(request_id)
                 return
             if path == API_INTERIOR_CONTOUR:
                 self._handle_interior_contour(request_id)
@@ -481,6 +487,43 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             _LOG.exception(
                 "[build-scraper:%s] [%s] échec: %s: %s",
+                request_id,
+                stage,
+                exc.__class__.__name__,
+                exc,
+            )
+            status = 404 if isinstance(exc, FileNotFoundError) else 500
+            if isinstance(exc, ValueError):
+                status = 422
+            self._send_error_json(status, exc, request_id=request_id, stage=stage)
+
+    def _handle_scraper_shape_candidates(self, request_id: str) -> None:
+        stage = "scraper_shape_candidates"
+        try:
+            content_length = self._parse_content_length()
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b""
+            request = read_scraper_shape_candidates_request(raw_body)
+            view_dir = resolve_view_dir(
+                output_root=self.server.output_root,
+                active_view_dir=self.server.active_view_dir,
+                model_id=request.model_id,
+            )
+            _log_step(
+                request_id,
+                stage,
+                "POST /api/scraper-shape-candidates",
+                view_dir=str(view_dir),
+                model_id=request.model_id or view_dir.name,
+            )
+            payload = build_scraper_shape_candidates_response(
+                view_dir=view_dir,
+                models_root=self.server.models_root,
+                count=request.count,
+            )
+            self._send_json(200, payload)
+        except Exception as exc:
+            _LOG.exception(
+                "[shape-candidates:%s] [%s] échec: %s: %s",
                 request_id,
                 stage,
                 exc.__class__.__name__,
