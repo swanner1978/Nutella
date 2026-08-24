@@ -649,6 +649,9 @@
       .scraper-view-controls[hidden] {
         display: none;
       }
+      .view-toolbar .toggle[hidden] {
+        display: none;
+      }
       .view-toolbar select {
         min-width: 11rem;
         padding: 0.35rem 0.55rem;
@@ -696,21 +699,68 @@
       .viewcube-canvas[hidden] {
         display: none;
       }
-      .candidate-navigator {
+      .coverage-play-bar {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        z-index: 7;
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
+        gap: 0.35rem;
+        padding: 0.18rem 0.4rem;
+        border: 1px solid #5a5a5a;
+        border-radius: 6px;
+        background: rgba(18, 18, 18, 0.88);
+        color: #f3f3f3;
+        font-size: 0.78rem;
+        pointer-events: auto;
+      }
+      .coverage-play-bar[hidden] {
+        display: none;
+      }
+      .coverage-play-bar button {
+        min-width: 4.4rem;
+        height: 1.65rem;
+        border: 1px solid #5a5a5a;
+        border-radius: 4px;
+        background: #2a2a2a;
+        color: #ffffff;
+        cursor: pointer;
+        font-size: 0.76rem;
+      }
+      .coverage-play-bar button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      #coverage-play-phi {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        color: #d8d8d8;
+        padding: 0 0.2rem;
+      }
+      .candidate-navigator {
+        display: inline-flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0.45rem;
         margin-left: auto;
-        padding: 0.22rem 0.4rem;
+        padding: 0.18rem 0.4rem;
         border: 1px solid #5a5a5a;
         border-radius: 6px;
         background: #1f1f1f;
         color: #f3f3f3;
         font-size: 0.82rem;
         pointer-events: auto;
+        max-height: 2.4rem;
       }
       .candidate-navigator[hidden] {
         display: none;
+      }
+      .candidate-navigator-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
       }
       .candidate-navigator button {
         min-width: 2.1rem;
@@ -726,11 +776,70 @@
         opacity: 0.35;
         cursor: default;
       }
+      .candidate-metrics {
+        font-size: 0.75rem;
+        line-height: 1.35;
+        color: #d0d0d0;
+        padding: 0.15rem 0.1rem 0.05rem;
+      }
+      .candidate-metrics[hidden] {
+        display: none;
+      }
+      .candidate-play-hint {
+        font-size: 0.68rem;
+        color: #a8a8a8;
+        max-width: 22rem;
+        white-space: normal;
+      }
+      #coverage-audit-hud {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.7rem;
+        line-height: 1.4;
+        color: #f0f0f0;
+        white-space: pre-wrap;
+        margin-top: 0.25rem;
+      }
       .candidate-navigator-label {
-        min-width: 14.5rem;
+        min-width: 11.5rem;
         text-align: center;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
+      }
+      .candidate-navigator-label.is-best {
+        color: #ffe566;
+      }
+      .candidate-navigator-label.is-reference {
+        color: #9fd4ff;
+      }
+      .candidate-badge {
+        font-size: 0.68rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #ffe566;
+        white-space: nowrap;
+      }
+      .candidate-badge[hidden] {
+        display: none;
+      }
+      .candidate-top-filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.72rem;
+        color: #c8c8c8;
+      }
+      .candidate-top-filter select {
+        background: #2a2a2a;
+        color: #f3f3f3;
+        border: 1px solid #5a5a5a;
+        border-radius: 4px;
+        height: 1.7rem;
+        padding: 0 0.3rem;
+      }
+      .candidate-neighbors {
+        color: #b0b0b0;
+        font-size: 0.72rem;
+        font-variant-numeric: tabular-nums;
       }
       .view-viewport {
         position: absolute;
@@ -1177,38 +1286,67 @@
                 <option value="right">Vue droite</option>
                 <option value="iso">Vue isométrique</option>
               </select>
+              <label class="toggle" id="toggle-toolbar-pot-label" title="Afficher le pot importé">
+                <input type="checkbox" id="toggle-toolbar-pot" checked />
+                Pot
+              </label>
+              <label class="toggle" id="toggle-toolbar-wireframe-label" hidden title="Afficher le wireframe du pot">
+                <input type="checkbox" id="toggle-toolbar-wireframe" />
+                Wireframe
+              </label>
               <label class="toggle" id="toggle-coordinate-frame-label" title="Afficher le repère 3D gradué (10 mm)">
                 <input type="checkbox" id="toggle-coordinate-frame" data-layer-toggle="coordinate-frame" checked />
                 Repère
               </label>
-              <label class="toggle" id="toggle-scene-scraper-label" title="Afficher le scraper paramétrique">
+              <label class="toggle" id="toggle-scene-scraper-label" title="Afficher le scraper jaune de référence (visuel)">
                 <input type="checkbox" id="toggle-scene-scraper" data-visibility-toggle="scraper" />
                 Scraper
               </label>
               <div class="scraper-view-controls" id="scraper-view-controls" hidden>
-                <label class="toggle" title="Afficher la cage et ses points de contrôle">
-                  <input type="checkbox" id="toggle-scraper-cues" checked />
-                  Repères
-                </label>
-                <label class="toggle" title="Afficher le pot visual.stl (référence visuelle uniquement)">
-                  <input type="checkbox" id="toggle-scraper-pot" />
-                  Pot de Nutella
-                </label>
-                <label class="toggle" title="Lisser la ligne jaune sans déplacer les points de contrôle">
-                  <input type="checkbox" id="toggle-scraper-smoothing" />
-                  Lissage
+                <label class="toggle" title="Matrice de points intérieure (référence de simulation)">
+                  <input type="checkbox" id="toggle-scraper-points" />
+                  Nuage de points
                 </label>
               </div>
               <div class="candidate-navigator" id="candidate-navigator" hidden>
-                <button id="candidate-prev" type="button" aria-label="Candidat précédent">←</button>
-                <span class="candidate-navigator-label" id="candidate-label">Candidat A0 · 1 / 1</span>
-                <button id="candidate-next" type="button" aria-label="Candidat suivant">→</button>
+                <div class="candidate-navigator-row">
+                  <button id="candidate-prev" type="button" aria-label="Candidat précédent">←</button>
+                  <span class="candidate-navigator-label" id="candidate-label">A0 — 1 / 1</span>
+                  <button id="candidate-next" type="button" aria-label="Candidat suivant">→</button>
+                  <label class="candidate-top-filter" for="candidate-top-filter">
+                    Top
+                    <select id="candidate-top-filter" aria-label="Filtrer le classement sauvé">
+                      <option value="10" selected>Top 10</option>
+                      <option value="20">Top 20</option>
+                      <option value="all">Tous</option>
+                    </select>
+                  </label>
+                  <span class="candidate-badge" id="candidate-badge" hidden></span>
+                </div>
+                <div class="candidate-metrics" id="candidate-metrics" hidden>
+                  <div id="candidate-metric-id">ID : —</div>
+                  <div id="candidate-metric-rank">Rang : —</div>
+                  <div id="candidate-metric-coverage">Couverture : —</div>
+                  <div id="candidate-metric-area">Aire : —</div>
+                  <div id="candidate-metric-family">Famille : —</div>
+                  <div id="candidate-metric-poses">Poses valides : —</div>
+                  <div id="candidate-metric-faces">Faces touchées : —</div>
+                  <div class="candidate-neighbors" id="candidate-neighbors"></div>
+                  <div id="coverage-audit-hud" hidden></div>
+                  <div class="candidate-play-hint" id="coverage-play-hint"></div>
+                </div>
               </div>
             </div>
             <section class="view-column">
               <div class="view-label" id="active-view-label" hidden></div>
               <div class="view-frame">
                 <div class="view-stage" id="main-stage"></div>
+                <div class="coverage-play-bar" id="coverage-play-bar" hidden>
+                  <button id="coverage-play" type="button" disabled title="Play 0–45° indisponible : poses SE(3) absentes du JSON">▶ Play</button>
+                  <button id="coverage-pause" type="button" disabled title="Pause">⏸ Pause</button>
+                  <button id="coverage-reset" type="button" disabled title="Revenir à φ = 0°">↺ Reset</button>
+                  <span id="coverage-play-phi">φ : 0° → 45°</span>
+                </div>
                 <canvas
                   id="viewcube-canvas"
                   class="viewcube-canvas"
@@ -1319,6 +1457,12 @@
         loadError: null,
         controlCage: null,
         candidateCurve: null,
+        coverageEnvelope: null,
+        coverageTarget: null,
+        coverageCoveredFaces: null,
+        coverageUnionPoints: null,
+        coverageNewPoints: null,
+        referenceA0Mesh: null,
       };
       const ISO_ELEVATION_LIMIT = 1.35;
       const ISO_ORBIT_SENSITIVITY = 0.008;
@@ -1336,6 +1480,9 @@
         simulateContact: "/api/simulate-contact",
         buildScraper: "/api/build-scraper",
         scraperShapeCandidates: "/api/scraper-shape-candidates",
+        coverageRankCatalog: "/api/coverage-rank-catalog",
+        coverageAngleAudit: "/api/coverage-angle-audit",
+        coverageTargetRegion: "/api/coverage-target-region",
         interiorContour: "/api/interior-contour",
         viewerScene: "/api/viewer-scene",
         runtime: "/api/runtime",
@@ -1414,6 +1561,14 @@
       let candidateCatalogCount = 0;
       let candidateCatalogLoaded = false;
       let candidateIndex = 0;
+      let candidateTopLimit = 10;
+      let coverageRankTotal = 0;
+      let coverageAudit = null;
+      let coverageAuditFrame = 0;
+      let coverageAuditTimer = null;
+      let coverageAuditPlaying = false;
+      let coverageAuditPaused = false;
+      const COVERAGE_AUDIT_FRAME_MS = 180;
       const ROTATION_CACHE_PARAM_KEYS = [
         "width_mm",
         "length_mm",
@@ -2302,47 +2457,78 @@
       }
 
       function setScraperSoloLayers(hiddenPot) {
-        const potToggle = document.querySelector('[data-visibility-toggle="pot"]');
+        const potToggle = document.getElementById("toggle-toolbar-pot");
+        const sidebarPot = document.querySelector('[data-visibility-toggle="pot"]');
         const envelopeEl = envelopeToggle;
         if (hiddenPot) {
           scraperSoloPrevLayers = {
             pot: potToggle ? potToggle.checked : true,
             envelope: envelopeEl ? envelopeEl.checked : false,
           };
-          if (potToggle) potToggle.checked = false;
-          if (envelopeEl) envelopeEl.checked = false;
+          if (potToggle) potToggle.checked = true;
+          if (sidebarPot) sidebarPot.checked = true;
+          if (envelopeEl) envelopeEl.checked = true;
         } else if (scraperSoloPrevLayers) {
           if (potToggle) potToggle.checked = scraperSoloPrevLayers.pot;
+          if (sidebarPot) sidebarPot.checked = scraperSoloPrevLayers.pot;
           if (envelopeEl) envelopeEl.checked = scraperSoloPrevLayers.envelope;
           scraperSoloPrevLayers = null;
-        }
-        if (scraperFrameToggle) {
-          scraperFrameToggle.checked = true;
-          syncScraperVisibilityToggles(scraperFrameToggle);
         }
         applyLayerVisibility();
       }
 
       function setScraperViewChrome(active) {
-        const frameLabel = document.getElementById("toggle-coordinate-frame-label");
-        const scraperLabel = document.getElementById("toggle-scene-scraper-label");
         const controls = document.getElementById("scraper-view-controls");
-        const cuesToggle = document.getElementById("toggle-scraper-cues");
-        const potToggle = document.getElementById("toggle-scraper-pot");
-        const smoothToggle = document.getElementById("toggle-scraper-smoothing");
-        if (frameLabel) frameLabel.hidden = Boolean(active);
-        if (scraperLabel) scraperLabel.hidden = Boolean(active);
+        const playBar = document.getElementById("coverage-play-bar");
+        const potToggle = document.getElementById("toggle-toolbar-pot");
+        const scraperToggle = document.getElementById("toggle-scene-scraper");
+        const wireframeLabel = document.getElementById("toggle-toolbar-wireframe-label");
         if (controls) controls.hidden = !active;
+        if (playBar) playBar.hidden = !active;
+        if (wireframeLabel) wireframeLabel.hidden = !active;
         if (toolbarScraperPanel) {
           toolbarScraperPanel.title = active
             ? "Quitter la vue Scraper"
             : "Vue scraper A + cage de contrôle";
         }
+        const pointsToggle = document.getElementById("toggle-scraper-points");
         if (active) {
-          if (cuesToggle) cuesToggle.checked = true;
-          if (potToggle) potToggle.checked = false;
-          if (smoothToggle) smoothToggle.checked = false;
+          if (potToggle) potToggle.checked = true;
+          if (scraperToggle) {
+            scraperToggle.checked = true;
+            syncScraperVisibilityToggles(scraperToggle);
+          }
+          if (pointsToggle) pointsToggle.checked = false;
         }
+      }
+
+      async function ensureVisualA0() {
+        if (scene3d.referenceA0Mesh) {
+          scene3d.scraperRest = scene3d.referenceA0Mesh;
+          return scene3d.referenceA0Mesh;
+        }
+        if (!activeModelLoaded || !currentModelId) return null;
+        const current = readScraperParametersFromForm();
+        const result = await buildScraperOnly({ ...current, ...SCRAPER_A_REFERENCE });
+        scene3d.referenceA0Mesh = flattenMesh(result.scraper_geometry);
+        scene3d.scraperRest = scene3d.referenceA0Mesh;
+        scene3d.controlCage = result.control_cage ?? scene3d.controlCage;
+        return scene3d.referenceA0Mesh;
+      }
+
+      async function onToolbarScraperToggle() {
+        const on = document.getElementById("toggle-scene-scraper")?.checked === true;
+        if (!on) {
+          scene3d.scraperRest = null;
+          redrawCameraView();
+          return;
+        }
+        await ensureVisualA0();
+        redrawCameraView();
+      }
+
+      async function onReferenceA0Toggle() {
+        await onToolbarScraperToggle();
       }
 
       function onScraperViewDisplayToggle() {
@@ -2356,7 +2542,15 @@
         const nav = document.getElementById("candidate-navigator");
         if (nav) nav.hidden = true;
         scene3d.candidateCurve = null;
-        if (scraperSoloRestMesh) scene3d.scraperRest = scraperSoloRestMesh;
+        scene3d.coverageEnvelope = null;
+        scene3d.coverageCoveredFaces = null;
+        scene3d.coverageUnionPoints = null;
+        scene3d.coverageNewPoints = null;
+        if (document.getElementById("toggle-scene-scraper")?.checked !== true) {
+          scene3d.scraperRest = null;
+        } else if (scene3d.referenceA0Mesh) {
+          scene3d.scraperRest = scene3d.referenceA0Mesh;
+        }
         setScraperViewChrome(false);
         setScraperSoloLayers(false);
         redrawCameraView();
@@ -2376,22 +2570,26 @@
         if (toolbarScraperPanel) toolbarScraperPanel.dataset.active = "true";
         const nav = document.getElementById("candidate-navigator");
         if (nav) nav.hidden = false;
-        syncCandidateNavigator();
+        const topSelect = document.getElementById("candidate-top-filter");
+        if (topSelect) topSelect.value = "10";
+        candidateTopLimit = 10;
+        scene3d.scraperTransform = null;
+        scene3d.controlCage = null;
+        scene3d.referenceA0Mesh = null;
+        scene3d.coverageTarget = null;
+        scene3d.coverageEnvelope = null;
+        scraperSoloRestMesh = null;
         setScraperViewChrome(true);
         setScraperSoloLayers(true);
         switchView("iso");
-        const current = readScraperParametersFromForm();
-        const parameters = { ...current, ...SCRAPER_A_REFERENCE };
-        setStatus("Affichage du scraper A de référence…", "loading");
-        const result = await buildScraperOnly(parameters);
-        scene3d.controlCage = result.control_cage ?? null;
-        scene3d.scraperTransform = null;
+        setStatus("Chargement du scraper visuel A0…", "loading");
+        await ensureVisualA0();
         scraperSoloRestMesh = scene3d.scraperRest;
-        cacheReferenceCandidate(result);
-        applyCachedCandidate(0);
-        setStatus("Scraper A + cage de contrôle", "ready");
+        await loadCoverageTargetRegion();
+        await loadShapeCandidateCatalog({ resetToBest: true });
+        syncCandidateNavigator();
+        setStatus("Scraper — matrice intérieure A0 → +90°", "ready");
         redrawCameraView();
-        return result;
       }
 
       function cacheReferenceCandidate(result) {
@@ -2418,11 +2616,18 @@
         syncCandidateNavigator();
       }
 
-      async function loadShapeCandidateCatalog() {
-        if (!currentModelId) return;
+      async function loadShapeCandidateCatalog(options = {}) {
+        if (!currentModelId && !API.coverageRankCatalog) return;
         const nav = document.getElementById("candidate-navigator");
         if (candidateCatalogCount > 1 && candidateCache.size > 1) {
           candidateCatalogLoaded = true;
+          if (options.resetToBest) candidateIndex = 0;
+          if (nav) nav.hidden = false;
+          syncCandidateNavigator();
+          return;
+        }
+        const coverageLoaded = await tryLoadCoverageRankCatalog(options);
+        if (coverageLoaded) {
           if (nav) nav.hidden = false;
           syncCandidateNavigator();
           return;
@@ -2455,58 +2660,454 @@
         syncCandidateNavigator();
       }
 
+      async function tryLoadCoverageRankCatalog(options = {}) {
+        try {
+          const response = await fetch(API.coverageRankCatalog, { cache: "no-store" });
+          const payload = await readJsonResponse(response);
+          if (!response.ok) return false;
+          if (payload.simulator_invoked || payload.coverage_recomputed) {
+            throw new Error("Le catalogue couverture a relancé le simulateur — refusé");
+          }
+          const items = Array.isArray(payload.candidates) ? payload.candidates : [];
+          if (!items.length) return false;
+          const previousId = options.resetToBest
+            ? null
+            : (candidateCache.get(candidateIndex) || {}).candidate_id;
+          candidateCache.clear();
+          items.forEach((item, index) => {
+            candidateCache.set(index, { ...item, index });
+          });
+          candidateCatalogCount = items.length;
+          candidateCatalogLoaded = true;
+          coverageRankTotal = items.length;
+          if (options.resetToBest) {
+            candidateIndex = 0;
+          } else {
+            const keepIndex = previousId
+              ? items.findIndex((item) => item.candidate_id === previousId)
+              : -1;
+            candidateIndex = keepIndex >= 0 ? keepIndex : 0;
+          }
+          return true;
+        } catch (error) {
+          console.warn("[coverage-rank]", error);
+          return false;
+        }
+      }
+
+      function visibleCatalogCount() {
+        const n = Math.max(1, candidateCatalogCount || candidateCache.size || 1);
+        if (candidateTopLimit == null) return n;
+        return Math.max(1, Math.min(n, candidateTopLimit));
+      }
+
+      function neighborSummary(entry) {
+        if (!entry || !entry.candidate_id) return "—";
+        const cov = Number.isFinite(Number(entry.coverage_percent))
+          ? ` · ${formatFrNumber(entry.coverage_percent, 2)} %`
+          : "";
+        return `${entry.candidate_id}${cov}`;
+      }
+
+      function formatFrNumber(value, digits) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "—";
+        return number.toFixed(digits).replace(".", ",");
+      }
+
       function formatCandidateFamily(family) {
         if (!family) return "";
         return CANDIDATE_FAMILY_LABELS[family] || String(family);
       }
 
       function syncCandidateNavigator() {
-        const total = Math.max(1, candidateCatalogCount || candidateCache.size || 1);
+        const visible = visibleCatalogCount();
+        const catalogTotal = visible;
         const cached = candidateCache.get(candidateIndex) || {};
         const id = cached.candidate_id
           || (candidateIndex === 0 ? "A0" : `S${String(candidateIndex).padStart(4, "0")}`);
-        const family = formatCandidateFamily(cached.family);
+        const rank = Number.isFinite(Number(cached.rank)) ? Number(cached.rank) : candidateIndex + 1;
+        const hasCoverage = Number.isFinite(Number(cached.coverage_percent));
+        const coverageText = hasCoverage
+          ? ` · ${formatFrNumber(cached.coverage_percent, 2)} %`
+          : "";
         const label = document.getElementById("candidate-label");
         if (label) {
-          label.textContent = family
-            ? `Candidat ${id} · ${candidateIndex + 1} / ${total} · ${family}`
-            : `Candidat ${id} · ${candidateIndex + 1} / ${total}`;
+          label.textContent = `${id}${coverageText} — ${rank} / ${catalogTotal}`;
+          label.classList.toggle("is-best", cached.is_best === true || rank === 1);
+          label.classList.toggle("is-reference", cached.is_reference_a === true || id === "A0");
+        }
+        const badge = document.getElementById("candidate-badge");
+        if (badge) {
+          const marks = [];
+          if (cached.is_best === true || rank === 1) marks.push("Meilleur");
+          if (cached.is_reference_a === true || id === "A0") marks.push("Référence");
+          badge.textContent = marks.join(" · ");
+          badge.hidden = marks.length === 0;
         }
         const prev = document.getElementById("candidate-prev");
         const next = document.getElementById("candidate-next");
-        if (prev) prev.disabled = candidateIndex <= 0;
-        if (next) {
-          next.disabled = candidateCatalogLoaded && candidateIndex >= total - 1;
+        if (prev) prev.disabled = candidateCatalogLoaded && candidateIndex <= 0;
+        if (next) next.disabled = candidateCatalogLoaded && candidateIndex >= visible - 1;
+        const metrics = document.getElementById("candidate-metrics");
+        if (metrics) metrics.hidden = true;
+        const family = formatCandidateFamily(cached.family);
+        const idEl = document.getElementById("candidate-metric-id");
+        const rankEl = document.getElementById("candidate-metric-rank");
+        const coverageEl = document.getElementById("candidate-metric-coverage");
+        const areaEl = document.getElementById("candidate-metric-area");
+        const familyEl = document.getElementById("candidate-metric-family");
+        const posesEl = document.getElementById("candidate-metric-poses");
+        const facesEl = document.getElementById("candidate-metric-faces");
+        const neighborsEl = document.getElementById("candidate-neighbors");
+        if (idEl) idEl.textContent = `ID : ${id}`;
+        if (rankEl) rankEl.textContent = `Rang : ${rank} / ${catalogTotal}`;
+        if (coverageEl) {
+          coverageEl.textContent = hasCoverage
+            ? `Couverture : ${formatFrNumber(cached.coverage_percent, 2)} %`
+            : "Couverture : —";
         }
+        if (areaEl) {
+          const covered = Number(cached.covered_area_mm2);
+          const target = Number(cached.target_area_mm2);
+          areaEl.textContent = Number.isFinite(covered) && Number.isFinite(target)
+            ? `Aire : ${formatFrNumber(covered, 2)} / ${formatFrNumber(target, 2)} mm²`
+            : Number.isFinite(covered)
+              ? `Aire : ${formatFrNumber(covered, 2)} mm²`
+              : "Aire : —";
+        }
+        if (familyEl) {
+          familyEl.textContent = `Famille : ${family || cached.family || "—"}`;
+        }
+        if (posesEl) {
+          const valid = cached.valid_pose_count;
+          const all = cached.total_pose_count;
+          posesEl.textContent = Number.isFinite(Number(valid)) && Number.isFinite(Number(all))
+            ? `Poses valides : ${valid} / ${all}`
+            : "Poses valides : —";
+        }
+        if (facesEl) {
+          facesEl.textContent = Number.isFinite(Number(cached.touched_face_count))
+            ? `Faces touchées : ${cached.touched_face_count}`
+            : "Faces touchées : —";
+        }
+        if (neighborsEl) {
+          const previous = candidateIndex > 0 ? candidateCache.get(candidateIndex - 1) : null;
+          const following = candidateIndex + 1 < visible
+            ? candidateCache.get(candidateIndex + 1)
+            : null;
+          neighborsEl.textContent =
+            `← ${neighborSummary(previous)}   ${neighborSummary(following)} →`;
+        }
+        const play = document.getElementById("coverage-play");
+        const pause = document.getElementById("coverage-pause");
+        const reset = document.getElementById("coverage-reset");
+        const playHint = document.getElementById("coverage-play-hint");
+        const playInfo = cached.coverage_play || {};
+        const canDebugPlay = Boolean(
+          coverageAudit
+          && coverageAudit.candidate_id === id
+          && Array.isArray(coverageAudit.angles)
+          && coverageAudit.angles.length
+        );
+        if (play) {
+          play.disabled = !canDebugPlay || coverageAuditPlaying;
+          play.title = canDebugPlay
+            ? "Play : replay 0–45° des poses sauvegardées (aucun calcul)"
+            : "Play : dump d'audit absent (A0 / S0008 / S0010)";
+        }
+        if (pause) pause.disabled = !canDebugPlay || !coverageAuditPlaying;
+        if (reset) reset.disabled = !canDebugPlay;
+        if (playHint) {
+          playHint.textContent = canDebugPlay
+            ? "Play rejoue les poses 0–45° et accumule les patches de l'enveloppe."
+            : (playInfo.reason || "Play 0–45° : dump d'audit A0 / S0008 / S0010");
+        }
+        syncCoveragePlayPhi();
+      }
+
+      function bladeMeshFromControlPoints(points, widthMm, thicknessMm) {
+        const DISPLAY_BLADE_SCALE = 4.0;
+        const halfW = 0.5 * Number(widthMm) * DISPLAY_BLADE_SCALE;
+        const halfT = 0.5 * Number(thicknessMm) * DISPLAY_BLADE_SCALE;
+        const vertices = [];
+        const faces = [];
+        const unit = (x, y, z) => {
+          const n = Math.hypot(x, y, z);
+          return n > 1e-12 ? [x / n, y / n, z / n] : [0, 0, 0];
+        };
+        const cross = (a, b) => [
+          a[1] * b[2] - a[2] * b[1],
+          a[2] * b[0] - a[0] * b[2],
+          a[0] * b[1] - a[1] * b[0],
+        ];
+        for (let i = 0; i < points.length; i += 1) {
+          const p = points[i];
+          const q = i < points.length - 1 ? points[i + 1] : points[i - 1];
+          const tangent = unit(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
+          let outward = unit(p[0], 0, p[2]);
+          if (Math.hypot(outward[0], outward[1], outward[2]) < 1e-9) outward = [1, 0, 0];
+          let widthDir = unit(...cross(tangent, outward));
+          if (Math.hypot(widthDir[0], widthDir[1], widthDir[2]) < 1e-9) {
+            widthDir = unit(...cross(tangent, [0, 1, 0]));
+          }
+          if (Math.hypot(widthDir[0], widthDir[1], widthDir[2]) < 1e-9) widthDir = [0, 0, 1];
+          outward = unit(...cross(widthDir, tangent));
+          const corners = [
+            [p[0] - widthDir[0] * halfW - outward[0] * halfT, p[1] - widthDir[1] * halfW - outward[1] * halfT, p[2] - widthDir[2] * halfW - outward[2] * halfT],
+            [p[0] + widthDir[0] * halfW - outward[0] * halfT, p[1] + widthDir[1] * halfW - outward[1] * halfT, p[2] + widthDir[2] * halfW - outward[2] * halfT],
+            [p[0] + widthDir[0] * halfW + outward[0] * halfT, p[1] + widthDir[1] * halfW + outward[1] * halfT, p[2] + widthDir[2] * halfW + outward[2] * halfT],
+            [p[0] - widthDir[0] * halfW + outward[0] * halfT, p[1] - widthDir[1] * halfW + outward[1] * halfT, p[2] - widthDir[2] * halfW + outward[2] * halfT],
+          ];
+          corners.forEach((c) => vertices.push(c));
+          if (i === 0) continue;
+          const a = (i - 1) * 4;
+          const b = i * 4;
+          const quads = [[a, a + 1, b + 1, b], [a + 1, a + 2, b + 2, b + 1], [a + 2, a + 3, b + 3, b + 2], [a + 3, a, b, b + 3]];
+          quads.forEach(([i0, i1, i2, i3]) => {
+            faces.push([i0, i1, i2], [i0, i2, i3]);
+          });
+        }
+        return { vertices, faces, visual_only: true, display_blade_scale: DISPLAY_BLADE_SCALE };
+      }
+
+      function candidateBladeMesh(cached) {
+        if (cached && cached.scraper_geometry) {
+          return flattenMesh(cached.scraper_geometry);
+        }
+        const points = cached && cached.control_points_mm;
+        if (!Array.isArray(points) || points.length < 2) return null;
+        return flattenMesh(
+          bladeMeshFromControlPoints(
+            points,
+            Number(cached.width_mm) || 2.5,
+            Number(cached.thickness_mm) || 2.5,
+          ),
+        );
       }
 
       function applyCachedCandidate(index) {
-        const total = Math.max(1, candidateCatalogCount || candidateCache.size || 1);
+        const total = visibleCatalogCount();
         const nextIndex = Math.max(0, Math.min(total - 1, index));
         const cached = candidateCache.get(nextIndex);
-        if (!cached) return;
-        candidateIndex = nextIndex;
-        scene3d.candidateCurve = cached.control_points_mm || null;
-        if (cached.is_reference_a && (cached.scraper_geometry || scraperSoloRestMesh)) {
-          scene3d.scraperRest = cached.scraper_geometry
-            ? flattenMesh(cached.scraper_geometry)
-            : scraperSoloRestMesh;
-        } else {
-          scene3d.scraperRest = null;
+        if (!cached) {
+          syncCandidateNavigator();
+          return;
         }
-        scene3d.scraperTransform = null;
+        candidateIndex = nextIndex;
+        scene3d.candidateCurve = null;
+        const showScraper = document.getElementById("toggle-scene-scraper")?.checked === true;
+        if (showScraper && scene3d.referenceA0Mesh) {
+          scene3d.scraperRest = scene3d.referenceA0Mesh;
+        }
+        if (!showScraper) {
+          scene3d.controlCage = null;
+        }
+        stopCoverageAuditPlay();
+        coverageAudit = null;
+        scene3d.coverageCoveredFaces = new Set();
+        scene3d.coverageUnionPoints = null;
+        scene3d.coverageNewPoints = null;
         syncCandidateNavigator();
         redrawCameraView();
+        if (cached.candidate_id) {
+          loadCoverageAudit(cached.candidate_id);
+        }
       }
 
       async function stepShapeCandidate(delta) {
-        const target = candidateIndex + delta;
-        if (delta > 0 && !candidateCatalogLoaded) {
-          setStatus("Génération des formes admissibles…", "loading");
+        if (!candidateCatalogLoaded) {
+          setStatus("Chargement du classement couverture…", "loading");
           await loadShapeCandidateCatalog();
-          setStatus("Formes admissibles prêtes", "ready");
+          setStatus("Classement couverture prêt", "ready");
+        }
+        const total = visibleCatalogCount();
+        const target = candidateIndex + delta;
+        if (target < 0 || target >= total) {
+          applyCachedCandidate(Math.max(0, Math.min(total - 1, target)));
+          return;
         }
         applyCachedCandidate(target);
+      }
+
+      function onCandidateTopFilterChange() {
+        const select = document.getElementById("candidate-top-filter");
+        const value = select && select.value;
+        candidateTopLimit = value === "all" || !value ? null : Number(value);
+        if (!Number.isFinite(candidateTopLimit)) candidateTopLimit = null;
+        applyCachedCandidate(candidateIndex);
+      }
+
+      function stopCoverageAuditTimer() {
+        coverageAuditPlaying = false;
+        if (coverageAuditTimer != null) {
+          clearTimeout(coverageAuditTimer);
+          coverageAuditTimer = null;
+        }
+      }
+
+      async function loadCoverageTargetRegion() {
+        if (!currentModelId) return;
+        try {
+          const response = await fetch(
+            `${API.coverageTargetRegion}?model_id=${encodeURIComponent(currentModelId)}`,
+            { cache: "no-store" },
+          );
+          if (!response.ok) return;
+          const payload = await readJsonResponse(response);
+          if (payload.simulator_invoked || payload.coverage_recomputed) return;
+          scene3d.coverageTarget = payload;
+          if (scene3d.interior) {
+            scene3d.interior.sector_face_ids = payload.face_ids || [];
+          }
+        } catch {
+          scene3d.coverageTarget = null;
+        }
+      }
+
+      function stopCoverageAuditPlay() {
+        stopCoverageAuditTimer();
+        coverageAuditPaused = false;
+        coverageAuditFrame = 0;
+        scene3d.coverageCoveredFaces = new Set();
+        scene3d.coverageUnionPoints = null;
+        scene3d.coverageNewPoints = null;
+        scene3d.scraperTransform = null;
+        syncCoveragePlayPhi();
+      }
+
+      async function loadCoverageAudit(candidateId) {
+        stopCoverageAuditPlay();
+        try {
+          const response = await fetch(
+            `${API.coverageAngleAudit}?candidate_id=${encodeURIComponent(candidateId)}`,
+            { cache: "no-store" },
+          );
+          const stillCurrent = () => {
+            const current = candidateCache.get(candidateIndex);
+            return current && current.candidate_id === candidateId;
+          };
+          if (!response.ok) {
+            if (stillCurrent()) coverageAudit = null;
+            syncCandidateNavigator();
+            return;
+          }
+          const payload = await readJsonResponse(response);
+          if (!stillCurrent()) return;
+          if (payload.simulator_invoked || payload.coverage_recomputed) {
+            coverageAudit = null;
+            syncCandidateNavigator();
+            return;
+          }
+          coverageAudit = payload;
+        } catch {
+          coverageAudit = null;
+        }
+        syncCandidateNavigator();
+      }
+
+      function coverageAuditFrames() {
+        if (!coverageAudit || !Array.isArray(coverageAudit.angles)) return [];
+        return coverageAudit.angles;
+      }
+
+      function unionCoveredFacesUntil(index) {
+        const union = new Set();
+        const frames = coverageAuditFrames();
+        const last = Math.max(0, Math.min(frames.length - 1, index));
+        for (let k = 0; k <= last; k += 1) {
+          const ids = frames[k] && frames[k].face_ids ? frames[k].face_ids : [];
+          for (const id of ids) union.add(Number(id));
+        }
+        return union;
+      }
+
+      function syncCoveragePlayPhi() {
+        const phiEl = document.getElementById("coverage-play-phi");
+        if (!phiEl) return;
+        const frames = coverageAuditFrames();
+        if (!frames.length) {
+          phiEl.textContent = "φ : 0° → 45°";
+          return;
+        }
+        const frame = frames[Math.max(0, Math.min(frames.length - 1, coverageAuditFrame))];
+        const current = Number(frame && frame.phi_deg);
+        const label = Number.isFinite(current) ? current.toFixed(0) : "0";
+        phiEl.textContent = `φ : 0° → 45°  ·  ${label}°`;
+      }
+
+      function showCoverageAuditFrame(index) {
+        const frames = coverageAuditFrames();
+        if (!frames.length) return;
+        const i = Math.max(0, Math.min(frames.length - 1, index));
+        coverageAuditFrame = i;
+        const frame = frames[i];
+        scene3d.coverageUnionPoints = null;
+        scene3d.coverageNewPoints = null;
+        scene3d.coverageCoveredFaces = unionCoveredFacesUntil(i);
+        if (
+          i === frames.length - 1
+          && Array.isArray(coverageAudit.covered_face_ids)
+          && coverageAudit.covered_face_ids.length
+        ) {
+          scene3d.coverageCoveredFaces = new Set(
+            coverageAudit.covered_face_ids.map((id) => Number(id)),
+          );
+        }
+        const se3 = frame.se3_matrix_4x4;
+        if (se3 && scene3d.scraperRest) {
+          scene3d.scraperTransform = se3;
+        }
+        syncCoveragePlayPhi();
+        const hud = document.getElementById("coverage-audit-hud");
+        if (hud) hud.hidden = true;
+        redrawCameraView();
+      }
+
+      function tickCoverageAuditPlay() {
+        if (!coverageAuditPlaying) return;
+        const frames = coverageAuditFrames();
+        if (!frames.length || coverageAuditFrame >= frames.length - 1) {
+          coverageAuditPlaying = false;
+          coverageAuditPaused = false;
+          syncCandidateNavigator();
+          return;
+        }
+        coverageAuditTimer = setTimeout(() => {
+          showCoverageAuditFrame(coverageAuditFrame + 1);
+          tickCoverageAuditPlay();
+        }, COVERAGE_AUDIT_FRAME_MS);
+      }
+
+      function startCoverageAuditPlay() {
+        if (!coverageAudit || !coverageAudit.angles || !coverageAudit.angles.length) {
+          setStatus("Dump d'audit absent — aucun calcul n'est lancé.", "error");
+          return;
+        }
+        stopRotationPlay();
+        stopCoverageAuditTimer();
+        coverageAuditPaused = false;
+        const frames = coverageAudit.angles;
+        if (coverageAuditFrame >= frames.length - 1) {
+          coverageAuditFrame = 0;
+        }
+        coverageAuditPlaying = true;
+        showCoverageAuditFrame(coverageAuditFrame);
+        tickCoverageAuditPlay();
+        syncCandidateNavigator();
+      }
+
+      function pauseCoverageAuditPlay() {
+        stopCoverageAuditTimer();
+        coverageAuditPaused = true;
+        syncCandidateNavigator();
+      }
+
+      function resetCoverageAuditPlay() {
+        stopCoverageAuditTimer();
+        coverageAuditPaused = false;
+        showCoverageAuditFrame(0);
+        syncCandidateNavigator();
       }
 
       async function buildScraperOnly(parametersOverride = null) {
@@ -3799,11 +4400,13 @@
         };
       }
 
-      function collectTriangles(mesh, color, alpha, camera, items, cullBackfaces) {
+      function collectTriangles(mesh, color, alpha, camera, items, cullBackfaces, facePredicate) {
         if (!mesh?.vertices || !mesh.faces) return;
         const v = mesh.vertices;
         const f = mesh.faces;
         for (let i = 0; i < f.length; i += 3) {
+          const faceIndex = i / 3;
+          if (facePredicate && !facePredicate(faceIndex)) continue;
           const ia = f[i] * 3;
           const ib = f[i + 1] * 3;
           const ic = f[i + 2] * 3;
@@ -4157,6 +4760,20 @@
         return out;
       }
 
+      function drawCoverageAuditPoints(ctx, points, camera, color, radius) {
+        if (!points || !points.length) return;
+        for (const point of points) {
+          const p = projectPoint(point[0], point[1], point[2], camera);
+          if (p.depth <= 0.01) continue;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
       function drawCandidateContactCurve(ctx, curve, camera) {
         if (!curve || curve.length < 2) return;
         const path = document.getElementById("toggle-scraper-smoothing")?.checked
@@ -4255,23 +4872,34 @@
           setViewCubeVisible(false);
           return;
         }
-        const bounds = scraperSoloMode && (scene3d.scraperRest || scraperSoloRestMesh)
-          ? meshBounds(scene3d.scraperRest || scraperSoloRestMesh)
+        const bounds = scraperSoloMode
+          ? (scene3d.jar
+              ? meshBounds(scene3d.jar)
+              : scene3d.interior
+                ? meshBounds(scene3d.interior)
+                : { min: [-50, 0, -50], max: [50, 80, 50] })
           : scene3d.jar
           ? meshBounds(scene3d.jar)
           : { min: [-40, 0, -40], max: [40, 80, 40] };
         const camera = cameraFromPreset(preset, width, height, bounds);
-        const showPot = scraperSoloMode
-          ? document.getElementById("toggle-scraper-pot")?.checked === true
-          : document.querySelector('[data-visibility-toggle="pot"]')?.checked !== false;
+        const showPot = document.getElementById("toggle-toolbar-pot")?.checked === true
+          || (
+            !document.getElementById("toggle-toolbar-pot")
+            && document.querySelector('[data-visibility-toggle="pot"]')?.checked !== false
+          );
         const showScraper = scraperFrameToggle
           ? scraperFrameToggle.checked
           : document.querySelector('#sidebar-accordions [data-visibility-toggle="scraper"]')?.checked === true;
-        const showInterior =
-          !scraperSoloMode &&
-          document.querySelector('[data-visibility-toggle="envelope"]')?.checked === true;
+        const showInterior = scraperSoloMode
+          ? false
+          : document.querySelector('[data-visibility-toggle="envelope"]')?.checked === true;
         const showContour = isLayerEnabled("contour");
-        const showWireframe = isLayerEnabled("wireframe");
+        const showWireframe =
+          isLayerEnabled("wireframe")
+          || (
+            scraperSoloMode
+            && document.getElementById("toggle-toolbar-wireframe")?.checked === true
+          );
         const showFrame = isLayerEnabled("coordinate-frame");
         const staticKey =
           `${viewName}|${width}x${height}|pot:${showPot}|int:${showInterior}` +
@@ -4286,14 +4914,15 @@
           items = [];
           if (showPot && scene3d.jar) {
             collectSilhouetteEdges(scene3d.jar, "#d4d4d4", 1, camera, items, 2);
-            if (showWireframe) {
-              ensureMeshEdges(scene3d.jar);
-              collectEdges(scene3d.jar, "#777777", 0.55, camera, items, 0.65);
-            }
+          }
+          if (showWireframe && scene3d.jar) {
+            ensureMeshEdges(scene3d.jar);
+            collectEdges(scene3d.jar, "#777777", 0.55, camera, items, 0.65);
           }
           if (showInterior && scene3d.interior) {
-            collectSilhouetteEdges(scene3d.interior, "#a855f7", 1, camera, items, 1.1);
-            if (showWireframe) {
+            const interiorColor = scraperSoloMode ? "#55ffff" : "#a855f7";
+            collectSilhouetteEdges(scene3d.interior, interiorColor, 1, camera, items, 1.1);
+            if (showWireframe || scraperSoloMode) {
               ensureMeshEdges(scene3d.interior);
               collectEdges(scene3d.interior, "#55ffff", 0.55, camera, items, 0.65);
             }
@@ -4316,9 +4945,7 @@
         }
         if (showScraper && scene3d.scraperRest) {
           const posed = {
-            vertices: scraperSoloMode
-              ? scene3d.scraperRest.vertices
-              : posedScraperVertices(scene3d.scraperRest, scene3d.scraperTransform),
+            vertices: posedScraperVertices(scene3d.scraperRest, scene3d.scraperTransform),
             faces: scene3d.scraperRest.faces,
           };
           const color = scene3d.collision && !scraperSoloMode ? "#ff6b6b" : "#ffe600";
@@ -4348,13 +4975,17 @@
         ctx.globalAlpha = 1;
         if (
           scraperSoloMode &&
-          scene3d.controlCage &&
-          document.getElementById("toggle-scraper-cues")?.checked !== false
+          document.getElementById("toggle-scraper-points")?.checked === true &&
+          scene3d.coverageTarget &&
+          Array.isArray(scene3d.coverageTarget.points_mm)
         ) {
-          drawControlCageOverlay(ctx, scene3d.controlCage, camera);
-        }
-        if (scraperSoloMode && scene3d.candidateCurve) {
-          drawCandidateContactCurve(ctx, scene3d.candidateCurve, camera);
+          drawCoverageAuditPoints(
+            ctx,
+            scene3d.coverageTarget.points_mm,
+            camera,
+            "#ffffff",
+            3.2,
+          );
         }
         setViewCubeVisible(true);
         drawViewCube();
@@ -4386,6 +5017,10 @@
         scene3d.convention = payload.convention;
         scene3d.jar = flattenMesh(payload.jar);
         scene3d.interior = flattenMesh(payload.interior);
+        scene3d.coverageTarget = payload.coverage_target || null;
+        if (scene3d.interior && scene3d.coverageTarget) {
+          scene3d.interior.sector_face_ids = scene3d.coverageTarget.face_ids || [];
+        }
         scene3d.staticCache = null;
         resetIsoOrbitFromScene();
         const debug = cameraOppositionDebug();
@@ -5199,15 +5834,53 @@
           setStatus(error.message.split("\n")[0], "error");
         });
       });
-      document.getElementById("toggle-scraper-cues")?.addEventListener(
+      document.getElementById("candidate-top-filter")?.addEventListener(
+        "change",
+        onCandidateTopFilterChange,
+      );
+      document.getElementById("coverage-play")?.addEventListener("click", () => {
+        if (!scraperSoloMode) return;
+        startCoverageAuditPlay();
+      });
+      document.getElementById("coverage-pause")?.addEventListener("click", () => {
+        if (!scraperSoloMode) return;
+        pauseCoverageAuditPlay();
+      });
+      document.getElementById("coverage-reset")?.addEventListener("click", () => {
+        if (!scraperSoloMode) return;
+        resetCoverageAuditPlay();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (!scraperSoloMode) return;
+        if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+        const tag = event.target && event.target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          stepShapeCandidate(-1).catch((error) => {
+            setStatus(error.message.split("\n")[0], "error");
+          });
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          stepShapeCandidate(1).catch((error) => {
+            setStatus(error.message.split("\n")[0], "error");
+          });
+        }
+      });
+      document.getElementById("toggle-toolbar-pot")?.addEventListener(
+        "change",
+        () => {
+          const sidebarPot = document.querySelector('[data-visibility-toggle="pot"]');
+          const toolbarPot = document.getElementById("toggle-toolbar-pot");
+          if (sidebarPot && toolbarPot) sidebarPot.checked = toolbarPot.checked;
+          onScraperViewDisplayToggle();
+        },
+      );
+      document.getElementById("toggle-toolbar-wireframe")?.addEventListener(
         "change",
         onScraperViewDisplayToggle,
       );
-      document.getElementById("toggle-scraper-pot")?.addEventListener(
-        "change",
-        onScraperViewDisplayToggle,
-      );
-      document.getElementById("toggle-scraper-smoothing")?.addEventListener(
+      document.getElementById("toggle-scraper-points")?.addEventListener(
         "change",
         onScraperViewDisplayToggle,
       );
@@ -5221,6 +5894,9 @@
       });
       scraperFrameToggle?.addEventListener("change", () => {
         syncScraperVisibilityToggles(scraperFrameToggle);
+        onToolbarScraperToggle().catch((error) => {
+          setStatus(error.message.split("\n")[0], "error");
+        });
       });
       document
         .querySelector('#sidebar-accordions [data-visibility-toggle="scraper"]')

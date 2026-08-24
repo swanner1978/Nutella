@@ -686,6 +686,80 @@ def build_scraper_shape_candidates_response(
     }
 
 
+def build_coverage_rank_catalog_response(
+    *,
+    repo_root: Path,
+    json_path: Path | None = None,
+    csv_path: Path | None = None,
+) -> dict[str, Any]:
+    """Serve the saved 100-candidate ranking. Does not run CoverageSimulator."""
+    from nutella_scraper.engines.visualization.coverage_rank_catalog import (
+        DEFAULT_COVERAGE_CSV,
+        DEFAULT_COVERAGE_JSON,
+        build_ranked_coverage_viewer_payload,
+    )
+
+    root = Path(repo_root)
+    json_file = Path(json_path) if json_path is not None else root / DEFAULT_COVERAGE_JSON
+    csv_file = Path(csv_path) if csv_path is not None else root / DEFAULT_COVERAGE_CSV
+    return build_ranked_coverage_viewer_payload(
+        json_path=json_file,
+        csv_path=csv_file,
+    )
+
+
+def build_coverage_angle_audit_response(
+    *,
+    repo_root: Path,
+    candidate_id: str,
+) -> dict[str, Any]:
+    """Serve a saved per-angle dump. Does not run CoverageSimulator."""
+    from nutella_scraper.engines.compute.coverage_angle_audit import AUDIT_CANDIDATE_IDS
+
+    cid = str(candidate_id)
+    if cid not in AUDIT_CANDIDATE_IDS:
+        raise FileNotFoundError(f"Pas de dump d'audit pour {cid}")
+    path = Path(repo_root) / "output" / "coverage" / "angle_audit" / f"{cid}.json"
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Dump {path} introuvable. Lancer scripts/audit_coverage_angles.py"
+        )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("simulator_invoked") or payload.get("coverage_recomputed"):
+        raise ValueError("Dump d'audit invalide: recalcul signalé")
+    from nutella_scraper.engines.visualization.coverage_rank_catalog import (
+        evaluation_interior_envelope_payload,
+    )
+
+    payload["interior_envelope"] = evaluation_interior_envelope_payload()
+    payload["replay_mode"] = "envelope_45"
+    return payload
+
+
+def build_coverage_target_region_response(
+    *,
+    models_root: Path,
+    model_id: str,
+) -> dict[str, Any]:
+    """White 5 mm interior matrix (A0 → +90°). No simulator."""
+    from nutella_scraper.engines.compute.coverage_reference_matrix import (
+        build_coverage_reference_matrix,
+        matrix_to_payload,
+    )
+    from nutella_scraper.engines.compute.interior_surface_reference import (
+        load_interior_surface_reference,
+    )
+
+    interior = load_interior_surface_reference(
+        models_root=models_root,
+        model_id=str(model_id),
+        step_path=Path(models_root) / str(model_id) / ModelStore.REFERENCE_STEP,
+    )
+    payload = matrix_to_payload(build_coverage_reference_matrix(interior))
+    payload["model_id"] = str(model_id)
+    return payload
+
+
 def _compact_mesh_payload(
     vertices: np.ndarray,
     *,
@@ -747,6 +821,7 @@ def build_viewer_scene_response(
 
     interior_payload: dict[str, Any] | None = None
     interior_error: str | None = None
+    coverage_target: dict[str, Any] | None = None
     try:
         interior = load_interior_surface_reference(
             models_root=models_root,
@@ -761,6 +836,7 @@ def build_viewer_scene_response(
             "source": interior.source,
             "matching_face_count": interior.matching_face_count,
         }
+        coverage_target = None
     except (FileNotFoundError, ValueError, OSError) as exc:
         interior_error = str(exc)
 
@@ -779,6 +855,7 @@ def build_viewer_scene_response(
         },
         "interior": interior_payload,
         "interior_error": interior_error,
+        "coverage_target": coverage_target,
     }
 
 

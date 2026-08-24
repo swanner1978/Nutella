@@ -22,30 +22,25 @@ def test_candidate_navigator_lives_in_view_toolbar() -> None:
     assert 'id="candidate-prev"' in toolbar
     assert 'id="candidate-next"' in toolbar
     assert 'id="candidate-label"' in toolbar
-    assert "Candidat A0 · 1 / 1" in toolbar
+    assert 'id="candidate-top-filter"' in toolbar
+    assert "A0 — 1 / 1" in toolbar
     frame = _slice(html, 'class="view-frame"', 'id="viewcube-canvas"')
     assert "candidate-navigator" not in frame
 
 
-def test_entering_scraper_view_shows_a0_without_catalog() -> None:
+def test_entering_scraper_view_loads_a0_reference() -> None:
     html = _html()
     enter = _slice(
         html,
         "async function enterScraperSoloView",
         "function cacheReferenceCandidate",
     )
-    assert "loadShapeCandidateCatalog" not in enter
-    assert "API.scraperShapeCandidates" not in enter
-    assert "nav.hidden = false" in enter
-    assert "cacheReferenceCandidate" in enter
-    assert "applyCachedCandidate(0)" in enter
-    assert "SCRAPER_A_REFERENCE" in enter
-
-    cache = _slice(html, "function cacheReferenceCandidate", "async function loadShapeCandidateCatalog")
-    assert 'candidate_id: "A0"' in cache
-    assert "is_reference_a: true" in cache
-    assert 'family: "A0"' in cache
-    assert "candidateCache.set(0" in cache
+    assert "loadShapeCandidateCatalog({ resetToBest: true })" in enter
+    assert "candidateTopLimit = 10" in enter
+    assert "ensureVisualA0" in enter
+    assert "loadCoverageTargetRegion" in enter
+    assert "applyCachedCandidate(0)" not in enter
+    assert 'topSelect.value = "10"' in enter
 
 
 def test_next_loads_catalog_once_then_prev_uses_cache() -> None:
@@ -89,10 +84,20 @@ def test_navigator_label_includes_id_position_and_family() -> None:
     sync = _slice(html, "function syncCandidateNavigator", "function applyCachedCandidate")
     assert "cached.candidate_id" in sync
     assert "formatCandidateFamily(cached.family)" in sync
-    assert "Candidat ${id}" in sync
-    assert "${candidateIndex + 1} / ${total}" in sync
+    assert "${id}${coverageText} — ${rank} / ${catalogTotal}" in sync
+    assert "Meilleur" in sync
+    assert "Référence" in sync
+    assert "candidate-top-filter" in html
+    assert "play.disabled = !canDebugPlay" in sync
     assert "CANDIDATE_FAMILY_LABELS" in html
+    assert 'option value="10" selected' in html
+    assert 'id="toggle-scene-scraper"' in html
+    assert "let candidateTopLimit = 10" in html
+    assert "visibleCatalogCount" in html
     assert "référence" in html
     assert "parallèle" in html
     assert "inclinée" in html
     assert "asymétrique" in html
+    assert "candidateCatalogLoaded && candidateIndex <= 0" in sync
+    assert "ArrowLeft" in html
+    assert "coverage_percent" in sync

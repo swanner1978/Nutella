@@ -1,4 +1,4 @@
-"""UI contract: Scraper view chrome — Repères / pot / lissage."""
+"""UI contract: Charger STEP / Scraper toolbar — Pot, Repère, Scraper, Nuage."""
 
 from __future__ import annotations
 
@@ -15,24 +15,42 @@ def _slice(html: str, start: str, end: str) -> str:
     return html[html.index(start) : html.index(end)]
 
 
-def test_scraper_view_toolbar_has_cues_pot_and_smoothing() -> None:
+def test_load_step_toolbar_is_pot_frame_scraper() -> None:
+    html = _html()
+    toolbar = _slice(html, 'class="view-toolbar"', 'class="view-column"')
+    assert 'id="toggle-toolbar-pot"' in toolbar
+    assert 'id="toggle-coordinate-frame"' in toolbar
+    assert 'id="toggle-scene-scraper"' in toolbar
+    assert toolbar.index('id="toggle-toolbar-pot"') < toolbar.index(
+        'id="toggle-toolbar-wireframe"'
+    )
+    assert toolbar.index('id="toggle-toolbar-wireframe"') < toolbar.index(
+        'id="toggle-coordinate-frame"'
+    )
+    assert toolbar.index('id="toggle-coordinate-frame"') < toolbar.index(
+        'id="toggle-scene-scraper"'
+    )
+    assert "Wireframe" in toolbar
+    assert "Repères" not in toolbar
+    assert "Pot de Nutella" not in html
+    assert "Référence A0" not in html
+
+
+def test_scraper_view_toolbar_has_pot_frame_scraper_and_points() -> None:
     html = _html()
     toolbar = _slice(html, 'class="view-toolbar"', 'class="view-column"')
     assert 'id="scraper-view-controls"' in toolbar
-    assert 'id="toggle-scraper-cues"' in toolbar
-    assert 'id="toggle-scraper-pot"' in toolbar
-    assert 'id="toggle-scraper-smoothing"' in toolbar
-    assert "Pot de Nutella" in toolbar
-    assert "Lissage" in toolbar
-    assert "Repères" in toolbar
-    assert 'id="toggle-scraper-cues" checked' in toolbar
-    assert 'id="toggle-scraper-pot"' in toolbar
+    assert 'id="toggle-scraper-points"' in toolbar
+    assert 'id="toggle-toolbar-wireframe"' in toolbar
+    assert "Nuage de points" in toolbar
+    assert "Nuages de points" not in html
+    assert 'id="toggle-toolbar-wireframe-label" hidden' in toolbar
+    assert 'id="toggle-scraper-cues"' not in html
+    assert 'id="toggle-scraper-reference-a0"' not in html
+    assert 'id="toggle-scraper-pot"' not in html
     assert "checked" not in html[
-        html.index('id="toggle-scraper-pot"') : html.index('id="toggle-scraper-pot"') + 80
-    ]
-    assert "checked" not in html[
-        html.index('id="toggle-scraper-smoothing"') : html.index(
-            'id="toggle-scraper-smoothing"'
+        html.index('id="toggle-scraper-points"') : html.index(
+            'id="toggle-scraper-points"'
         )
         + 80
     ]
@@ -46,15 +64,20 @@ def test_entering_scraper_view_sets_default_toggles() -> None:
         "function cacheReferenceCandidate",
     )
     assert "setScraperViewChrome(true)" in enter
-    assert "loadShapeCandidateCatalog" not in enter
-    chrome = _slice(html, "function setScraperViewChrome", "function exitScraperSoloView")
-    assert "toggle-scraper-cues" in chrome
-    assert "cuesToggle.checked = true" in chrome
-    assert "potToggle.checked = false" in chrome
-    assert "smoothToggle.checked = false" in chrome
+    assert "loadShapeCandidateCatalog({ resetToBest: true })" in enter
+    assert "ensureVisualA0" in enter
+    chrome = _slice(
+        html,
+        "function setScraperViewChrome",
+        "async function ensureVisualA0",
+    )
+    assert "toggle-toolbar-pot" in chrome
+    assert "toggle-toolbar-wireframe-label" in chrome
+    assert "wireframeLabel.hidden = !active" in chrome
+    assert "potToggle.checked = true" in chrome
+    assert "scraperToggle.checked = true" in chrome
+    assert "pointsToggle.checked = false" in chrome
     assert "API.buildScraper" not in chrome
-    assert "loadShapeCandidateCatalog" not in chrome
-    assert "buildScraperOnly" not in chrome
 
 
 def test_smoothing_and_pot_toggles_do_not_rebuild() -> None:
@@ -86,10 +109,10 @@ def test_smoothing_and_pot_toggles_do_not_rebuild() -> None:
     assert "loadShapeCandidateCatalog" not in handler
     assert "API.buildScraper" not in handler
     assert "scraperShapeCandidates" not in handler
-    assert "onScraperViewDisplayToggle" in html
-    assert 'getElementById("toggle-scraper-pot")' in html
-    assert 'getElementById("toggle-scraper-smoothing")' in html
-    assert 'getElementById("toggle-scraper-cues")' in html
+    assert 'getElementById("toggle-toolbar-pot")' in html
+    assert 'getElementById("toggle-toolbar-wireframe")' in html
+    assert 'getElementById("toggle-scene-scraper")' in html
+    assert 'getElementById("toggle-scraper-points")' in html
 
 
 def test_candidate_navigation_ignores_smoothing_toggle() -> None:
@@ -104,3 +127,7 @@ def test_candidate_navigation_ignores_smoothing_toggle() -> None:
     apply = _slice(html, "function applyCachedCandidate", "async function stepShapeCandidate")
     assert "toggle-scraper-smoothing" not in apply
     assert "candidateCache.get" in apply
+    assert "referenceA0Mesh" in apply
+    assert "candidateBladeMesh" not in apply
+    assert "scraperSoloRestMesh" not in apply
+    assert "is_reference_a &&" not in apply

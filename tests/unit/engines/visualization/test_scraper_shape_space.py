@@ -286,7 +286,8 @@ def test_demo_viewer_has_candidate_navigator_and_keeps_play_cache() -> None:
             "function cacheReferenceCandidate"
         )
     ]
-    assert "loadShapeCandidateCatalog" not in enter
+    assert "loadShapeCandidateCatalog({ resetToBest: true })" in enter
+    assert "ensureVisualA0" in enter
     start = html.index("async function stepShapeCandidate")
     chunk = html[start : start + 500]
     assert "rotationCache.clear" not in chunk

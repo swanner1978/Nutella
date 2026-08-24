@@ -23,12 +23,15 @@ from nutella_scraper.engines.compute.interior_surface_reference import (
 )
 from nutella_scraper.engines.compute.scraper_envelope_path import (
     NUMERIC_GAP_MM,
+    EnvelopeStation,
     ScraperEnvelopePath,
     ScraperEnvelopePathBuilder,
+    interior_centroid_mm,
 )
 from nutella_scraper.engines.compute.scraper_geometry_generator import (
     ScraperGeometryGenerator,
 )
+
 
 @dataclass(frozen=True)
 class EnvelopeContactFrame:
@@ -126,19 +129,23 @@ def envelope_contact_frame(
     parameters: ScraperParameters,
     *,
     surface_progress_deg: float | None = None,
+    surface_mesh: trimesh.Trimesh | None = None,
 ) -> EnvelopeContactFrame:
     """
     Contact frame on the interior envelope at a path progress.
 
     Progress selects where along the horizontal contour the tip mid sits.
     It is NOT a forced spin of the solid about the jar axis.
+
+    ``surface_mesh`` reuses an already-built interior mesh and its spatial
+    index. The mesh is not copied and must not be mutated by the caller.
     """
     progress = float(
         parameters.surface_progress_deg
         if surface_progress_deg is None
         else surface_progress_deg
     )
-    mesh = surface.to_trimesh()
+    mesh = surface_mesh if surface_mesh is not None else surface.to_trimesh()
     y_min = float(surface.y_min_mm)
     y_max = float(surface.y_max_mm)
     y_mm = float(np.clip(parameters.position_z_mm, y_min, y_max))
@@ -224,6 +231,106 @@ def build_rigid_scraper_artifact(
             shape,
             model_id=surface.model_id,
         ),
+    )
+
+
+def remap_envelope_path_to_wall_curve(
+    reference_path: ScraperEnvelopePath,
+    wall_curve_mm: NDArray[np.float64],
+    surface: InteriorSurfaceReference,
+) -> ScraperEnvelopePath:
+    """Rigidly map each A-station onto a frozen candidate centreline.
+
+    Stations keep their relative width chord and thickness frame. Only the
+    local SE(3) frame at the wall mid-point changes. The candidate curve is
+    not resampled and A is not rebuilt.
+    """
+    curve = np.asarray(wall_curve_mm, dtype=np.float64)
+    stations = reference_path.stations
+    if curve.ndim != 2 or curve.shape[1] != 3:
+        raise ValueError("wall curve must be an (N, 3) point list")
+    if len(stations) != len(curve):
+        raise ValueError(
+            "wall curve length must match the reference envelope station count"
+        )
+    mesh = surface.to_trimesh()
+    snapped, _dist, tri_ids = mesh.nearest.on_surface(curve)
+    snapped = np.asarray(snapped, dtype=np.float64)
+    builder = ScraperEnvelopePathBuilder()
+    interior_target = interior_centroid_mm(surface)
+    remapped: list[EnvelopeStation] = []
+    for index, station in enumerate(stations):
+        wall0 = np.asarray(station.wall_points_mm, dtype=np.float64)
+        mid = len(wall0) // 2
+        src_wall = np.asarray(wall0[mid], dtype=np.float64)
+        src_normal = np.asarray(station.inward_normals[mid], dtype=np.float64)
+        dst_wall = np.asarray(snapped[index], dtype=np.float64)
+        dst_normal = builder._inward_normal_at(
+            mesh,
+            dst_wall,
+            int(tri_ids[index]),
+            interior_target=interior_target,
+        )
+        src_frame = contact_frame_from_tip(
+            tip_origin_mm=src_wall,
+            inward_normal=src_normal,
+            wall_point_mm=src_wall,
+        )
+        dst_frame = contact_frame_from_tip(
+            tip_origin_mm=dst_wall,
+            inward_normal=dst_normal,
+            wall_point_mm=dst_wall,
+        )
+        transform = rigid_transform_between_frames(src_frame, dst_frame)
+        rotation = np.asarray(transform[:3, :3], dtype=np.float64)
+        wall = transform_points(wall0, transform)
+        tip = transform_points(station.tip_points_mm, transform)
+        normals = np.asarray(station.inward_normals, dtype=np.float64) @ rotation.T
+        tangent = rotation @ np.asarray(station.tangent_length, dtype=np.float64)
+        remapped.append(
+            EnvelopeStation(
+                s_mm=float(station.s_mm),
+                y_mm=float(wall[mid, 1]),
+                tip_points_mm=tip,
+                inward_normals=normals,
+                tangent_length=tangent,
+                wall_points_mm=wall,
+            )
+        )
+    return ScraperEnvelopePath(
+        stations=tuple(remapped),
+        source=reference_path.source,
+    )
+
+
+def build_rigid_scraper_artifact_from_path(
+    surface: InteriorSurfaceReference,
+    parameters: ScraperParameters,
+    path: ScraperEnvelopePath,
+    *,
+    shape_fingerprint: str,
+) -> RigidScraperArtifact:
+    """Loft a frozen envelope path once. Fingerprint is the caller's identity."""
+    shape = design_parameters(parameters)
+    mesh = ScraperGeometryGenerator().generate(shape, surface, path=path)
+    mid = path.stations[len(path.stations) // 2]
+    tip_edge = np.asarray(mid.tip_points_mm, dtype=np.float64)
+    wall_edge = np.asarray(mid.wall_points_mm, dtype=np.float64)
+    tip_mid = tip_edge[len(tip_edge) // 2]
+    normal = np.asarray(mid.inward_normals[len(tip_edge) // 2], dtype=np.float64)
+    design_frame = contact_frame_from_tip(
+        tip_origin_mm=tip_mid,
+        inward_normal=normal,
+        wall_point_mm=wall_edge[len(wall_edge) // 2],
+        surface_progress_deg=0.0,
+    )
+    return RigidScraperArtifact(
+        mesh=mesh,
+        design_frame=design_frame,
+        tip_edge_mm=tip_edge,
+        wall_edge_mm=wall_edge,
+        design_path=path,
+        shape_fingerprint=str(shape_fingerprint),
     )
 
 

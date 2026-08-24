@@ -183,10 +183,15 @@ def test_demo_viewer_wireframe_off_skips_full_mesh_edges() -> None:
     assert "collectTriangles(posed" in draw_chunk
     assert "ensureMeshEdges(scene3d.jar)" in draw_chunk
     assert "collectEdges(scene3d.jar" in draw_chunk
-    jar_edges_at = draw_chunk.index("collectEdges(scene3d.jar")
-    wire_at = draw_chunk.rfind("if (showWireframe)", 0, jar_edges_at)
-    assert wire_at != -1
-    assert "ensureMeshEdges(scene3d.jar)" in draw_chunk[wire_at:jar_edges_at]
+    assert "if (showPot && scene3d.jar)" in draw_chunk
+    assert "if (showWireframe && scene3d.jar)" in draw_chunk
+    assert draw_chunk.index("if (showPot && scene3d.jar)") < draw_chunk.index(
+        "collectSilhouetteEdges(scene3d.jar"
+    )
+    assert draw_chunk.index("if (showWireframe && scene3d.jar)") < draw_chunk.index(
+        "collectEdges(scene3d.jar"
+    )
+    assert "toggle-toolbar-wireframe" in draw_chunk
 
 
 def test_demo_viewer_hides_legacy_viewport_debug_labels() -> None:
@@ -363,12 +368,14 @@ def test_demo_viewer_scraper_button_opens_solo_view_with_cage() -> None:
     assert 'toolbarScraperPanel?.addEventListener("click", toggleScraperPanel)' not in html
     enter = html[
         html.index("async function enterScraperSoloView") : html.index(
-            "async function buildScraperOnly"
+            "function cacheReferenceCandidate"
         )
     ]
     assert "gizmo" not in enter.lower()
     assert "Sculpt" not in enter
-    assert "SCRAPER_A_REFERENCE" in enter
+    assert "ensureVisualA0" in enter
+    assert "loadCoverageTargetRegion" in enter
+    assert "loadShapeCandidateCatalog({ resetToBest: true })" in enter
     overlay = html[
         html.index("function drawControlCageOverlay") : html.index(
             "function cameraOppositionDebug"
@@ -378,7 +385,7 @@ def test_demo_viewer_scraper_button_opens_solo_view_with_cage() -> None:
     assert "center_row_index" in overlay
     assert "addEventListener" not in overlay
     draw = html[html.index("function drawScene3D") : html.index("async function loadViewerScene")]
-    assert "drawControlCageOverlay" in draw
     assert "scraperSoloMode" in draw
+    assert "function drawControlCageOverlay" in html
     assert "buildScraperOnly" not in draw
     assert "API.buildScraper" not in draw

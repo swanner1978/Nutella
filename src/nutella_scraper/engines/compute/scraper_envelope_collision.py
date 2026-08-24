@@ -16,6 +16,9 @@ from numpy.typing import NDArray
 
 from nutella_scraper.domain.models.scraper import ScraperPose
 from nutella_scraper.domain.models.scraper_parameters import ScraperParameters
+from nutella_scraper.engines.compute.envelope_surface_proximity import (
+    closest_on_envelope_surface,
+)
 from nutella_scraper.engines.compute.interior_surface_reference import (
     InteriorSurfaceReference,
 )
@@ -58,6 +61,7 @@ class EnvelopeCollisionReport:
     edge_hit: bool
     face_hit: bool
     clearance_ok: bool = True
+    contact_face_ids: frozenset[int] = frozenset()
 
     @property
     def status(self) -> str:
@@ -91,51 +95,88 @@ def _inward_normals(
     return normals
 
 
-def _signed_interior(
+def _proximity(
     surface_mesh: trimesh.Trimesh,
     points: NDArray[np.float64],
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Interior-positive signed distance and unsigned nearest-surface distance."""
-    closest, distances, tri_ids = surface_mesh.nearest.on_surface(points)
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.int64]]:
+    """Interior-positive signed distance, unsigned distance, nearest triangle ids."""
+    closest, distances, tri_ids = closest_on_envelope_surface(surface_mesh, points)
     closest = np.asarray(closest, dtype=np.float64)
     distances = np.asarray(distances, dtype=np.float64)
     tri_ids = np.asarray(tri_ids, dtype=np.int64)
     inward = _inward_normals(surface_mesh, closest, tri_ids)
     signed = np.sum((points - closest) * inward, axis=1)
+    return signed, distances, tri_ids
+
+
+def _signed_interior(
+    surface_mesh: trimesh.Trimesh,
+    points: NDArray[np.float64],
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Interior-positive signed distance and unsigned nearest-surface distance."""
+    signed, distances, _tri_ids = _proximity(surface_mesh, points)
     return signed, distances
 
 
+def _empty_points() -> NDArray[np.float64]:
+    return np.zeros((0, 3), dtype=np.float64)
+
+
+def _empty_ids() -> NDArray[np.int64]:
+    return np.zeros((0,), dtype=np.int64)
+
+
+def _edge_and_face_samples(
+    vertices: NDArray[np.float64],
+    faces: NDArray[np.int64],
+    unique_edges: NDArray[np.int64],
+    vertex_mask: NDArray[np.bool_],
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.bool_], NDArray[np.bool_]]:
+    """Edge midpoints + face centroids for features touching ``vertex_mask``."""
+    if len(unique_edges) > 0:
+        edge_sel = vertex_mask[unique_edges[:, 0]] | vertex_mask[unique_edges[:, 1]]
+    else:
+        edge_sel = np.zeros((0,), dtype=np.bool_)
+    if np.any(edge_sel):
+        a = vertices[unique_edges[edge_sel, 0]]
+        b = vertices[unique_edges[edge_sel, 1]]
+        mids = 0.5 * (a + b)
+    else:
+        mids = _empty_points()
+
+    if len(faces) > 0:
+        face_sel = vertex_mask[np.asarray(faces, dtype=np.int64)].any(axis=1)
+    else:
+        face_sel = np.zeros((0,), dtype=np.bool_)
+    if np.any(face_sel):
+        centroids = vertices[faces[face_sel]].mean(axis=1)
+    else:
+        centroids = _empty_points()
+    return mids, centroids, edge_sel, face_sel
+
+
 def _near_wall_edge_face_samples(
-    mesh: trimesh.Trimesh,
+    vertices: NDArray[np.float64],
+    faces: NDArray[np.int64],
+    unique_edges: NDArray[np.int64],
     vertex_distances: NDArray[np.float64],
     band_mm: float,
 ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
     """Edge midpoints + face centroids whose vertices sit near the envelope."""
-    vertices = np.asarray(mesh.vertices, dtype=np.float64)
-    faces = np.asarray(mesh.faces, dtype=np.int64)
-    near = vertex_distances <= float(band_mm)
+    near = np.asarray(vertex_distances, dtype=np.float64) <= float(band_mm)
+    mids, centroids, _edge_sel, _face_sel = _edge_and_face_samples(
+        vertices, faces, unique_edges, near
+    )
     chunks: list[NDArray[np.float64]] = []
     kinds: list[NDArray[np.int64]] = []
-
-    unique_edges = np.asarray(mesh.edges_unique, dtype=np.int64)
-    if len(unique_edges) > 0:
-        edge_near = near[unique_edges[:, 0]] | near[unique_edges[:, 1]]
-        if np.any(edge_near):
-            a = vertices[unique_edges[edge_near, 0]]
-            b = vertices[unique_edges[edge_near, 1]]
-            mid = 0.5 * (a + b)
-            chunks.append(mid)
-            kinds.append(np.ones(len(mid), dtype=np.int64))
-
-    if len(faces) > 0:
-        face_near = near[faces].any(axis=1)
-        if np.any(face_near):
-            centroids = vertices[faces[face_near]].mean(axis=1)
-            chunks.append(centroids)
-            kinds.append(np.full(int(np.count_nonzero(face_near)), 2, dtype=np.int64))
-
+    if len(mids) > 0:
+        chunks.append(mids)
+        kinds.append(np.ones(len(mids), dtype=np.int64))
+    if len(centroids) > 0:
+        chunks.append(centroids)
+        kinds.append(np.full(len(centroids), 2, dtype=np.int64))
     if not chunks:
-        return np.zeros((0, 3), dtype=np.float64), np.zeros((0,), dtype=np.int64)
+        return _empty_points(), _empty_ids()
     return np.vstack(chunks), np.concatenate(kinds)
 
 
@@ -149,10 +190,94 @@ def _useful_corridor_mask(
     return (y >= float(lower_y) - 1e-3) & (y <= float(opening_y))
 
 
+def _proximity_vertices_and_wall_extras(
+    surface_mesh: trimesh.Trimesh,
+    vertices: NDArray[np.float64],
+    faces: NDArray[np.int64],
+    unique_edges: NDArray[np.int64],
+    in_band: NDArray[np.bool_],
+    *,
+    lower_y: float,
+    opening_y: float,
+    band_mm: float,
+    eps: float,
+) -> tuple[
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.int64],
+    NDArray[np.float64],
+    NDArray[np.float64],
+    NDArray[np.int64],
+    NDArray[np.int64],
+    bool,
+]:
+    """Vertex nearest, then extra nearest only if vertices did not already penetrate.
+
+    Extra samples (edge midpoints / face centroids) are different query points.
+    They stay mandatory when vertices stay interior: a triangle can still cross
+    the envelope, and extras can add contact-face ids. Concatenating a
+    corridor superset into the first ``on_surface`` call is equivalent but
+    slower, so the second query is skipped only when it cannot change the
+    decision (vertex penetration, or no extra samples in-band).
+    """
+    signed, distances, tri_ids = _proximity(surface_mesh, vertices[in_band])
+    vertex_hit = bool(float(np.max(-signed)) > eps)
+    empty_s = np.zeros((0,), dtype=np.float64)
+    if vertex_hit:
+        return (
+            signed,
+            distances,
+            tri_ids,
+            empty_s,
+            empty_s,
+            _empty_ids(),
+            _empty_ids(),
+            vertex_hit,
+        )
+
+    distances_all = np.full(len(vertices), 1e9, dtype=np.float64)
+    distances_all[in_band] = distances
+    extra, kinds = _near_wall_edge_face_samples(
+        vertices, faces, unique_edges, distances_all, band_mm
+    )
+    if len(extra) > 0:
+        extra_in = _useful_corridor_mask(extra, lower_y, opening_y)
+        extra = extra[extra_in]
+        kinds = kinds[extra_in]
+    if len(extra) == 0:
+        return (
+            signed,
+            distances,
+            tri_ids,
+            empty_s,
+            empty_s,
+            _empty_ids(),
+            _empty_ids(),
+            vertex_hit,
+        )
+
+    extra_signed, extra_dist, extra_tri = _proximity(surface_mesh, extra)
+    return (
+        signed,
+        distances,
+        tri_ids,
+        extra_signed,
+        extra_dist,
+        extra_tri,
+        kinds,
+        vertex_hit,
+    )
+
+
 def evaluate_envelope_collision(
     posed_mesh: trimesh.Trimesh,
     surface: InteriorSurfaceReference,
     parameters: ScraperParameters,
+    *,
+    surface_mesh: trimesh.Trimesh | None = None,
+    vertices: NDArray[np.float64] | None = None,
+    faces: NDArray[np.int64] | None = None,
+    edges_unique: NDArray[np.int64] | None = None,
 ) -> EnvelopeCollisionReport:
     """
     Hard constraint: scraper volume must stay interior-side of the envelope.
@@ -163,15 +288,30 @@ def evaluate_envelope_collision(
     Vertices are a fast reject. Edges and faces near the wall are required
     before a pose is declared VALID — a triangle can cross while all of its
     vertices remain inside. Clearance is unsigned distance in-band.
-    """
-    if posed_mesh.is_empty or len(posed_mesh.vertices) == 0:
-        raise ValueError("Empty scraper mesh")
 
-    surface_mesh = surface.to_trimesh()
+    Optional ``vertices`` / ``faces`` / ``edges_unique`` apply a rigid pose
+    without copying the scraper mesh: topology stays immutable, only the
+    vertex array moves.
+    """
+    verts = np.asarray(
+        vertices if vertices is not None else posed_mesh.vertices,
+        dtype=np.float64,
+    )
+    if verts.size == 0:
+        raise ValueError("Empty scraper mesh")
+    face_idx = np.asarray(
+        faces if faces is not None else posed_mesh.faces,
+        dtype=np.int64,
+    )
+    edge_idx = np.asarray(
+        edges_unique if edges_unique is not None else posed_mesh.edges_unique,
+        dtype=np.int64,
+    )
+
+    surface_mesh = surface_mesh if surface_mesh is not None else surface.to_trimesh()
     eps = _contact_eps_mm(surface_mesh)
     opening_y, lower_y, _max_length = scraper_length_span(surface)
-    vertices = np.asarray(posed_mesh.vertices, dtype=np.float64)
-    in_band = _useful_corridor_mask(vertices, lower_y, opening_y)
+    in_band = _useful_corridor_mask(verts, lower_y, opening_y)
     clearance = float(parameters.clearance_mm)
     if not np.any(in_band):
         return EnvelopeCollisionReport(
@@ -187,35 +327,45 @@ def evaluate_envelope_collision(
             clearance_ok=True,
         )
 
-    signed, distances = _signed_interior(surface_mesh, vertices[in_band])
+    band = (
+        float(parameters.thickness_mm)
+        + float(parameters.clearance_mm)
+        + _WALL_BAND_EXTRA_MM
+    )
+    (
+        signed,
+        distances,
+        tri_ids,
+        extra_signed,
+        extra_dist,
+        extra_tri,
+        extra_kinds,
+        vertex_hit,
+    ) = _proximity_vertices_and_wall_extras(
+        surface_mesh,
+        verts,
+        face_idx,
+        edge_idx,
+        in_band,
+        lower_y=lower_y,
+        opening_y=opening_y,
+        band_mm=band,
+        eps=eps,
+    )
     max_outward = float(np.max(-signed))
     min_signed = float(np.min(signed))
     min_unsigned = float(np.min(distances))
-    vertex_hit = bool(max_outward > eps)
     edge_hit = False
     face_hit = False
-
-    if not vertex_hit:
-        band = (
-            float(parameters.thickness_mm)
-            + float(parameters.clearance_mm)
-            + _WALL_BAND_EXTRA_MM
-        )
-        distances_all = np.full(len(vertices), 1e9, dtype=np.float64)
-        distances_all[in_band] = distances
-        extra, kinds = _near_wall_edge_face_samples(posed_mesh, distances_all, band)
-        if len(extra) > 0:
-            extra_in = _useful_corridor_mask(extra, lower_y, opening_y)
-            extra = extra[extra_in]
-            kinds = kinds[extra_in]
-        if len(extra) > 0:
-            extra_signed, extra_dist = _signed_interior(surface_mesh, extra)
-            max_outward = max(max_outward, float(np.max(-extra_signed)))
-            min_signed = min(min_signed, float(np.min(extra_signed)))
-            min_unsigned = min(min_unsigned, float(np.min(extra_dist)))
-            outward_mask = (-extra_signed) > eps
-            edge_hit = bool(np.any(outward_mask[kinds == 1])) if np.any(kinds == 1) else False
-            face_hit = bool(np.any(outward_mask[kinds == 2])) if np.any(kinds == 2) else False
+    if len(extra_signed) > 0:
+        max_outward = max(max_outward, float(np.max(-extra_signed)))
+        min_signed = min(min_signed, float(np.min(extra_signed)))
+        min_unsigned = min(min_unsigned, float(np.min(extra_dist)))
+        outward_mask = (-extra_signed) > eps
+        has_edge_kind = np.any(extra_kinds == 1)
+        has_face_kind = np.any(extra_kinds == 2)
+        edge_hit = bool(np.any(outward_mask[extra_kinds == 1])) if has_edge_kind else False
+        face_hit = bool(np.any(outward_mask[extra_kinds == 2])) if has_face_kind else False
 
     has_collision = bool(max_outward > eps)
     # Tessellation chords sit slightly inside the true CAD wall; allow the
@@ -223,6 +373,15 @@ def evaluate_envelope_collision(
     required = max(0.0, clearance - NUMERIC_GAP_MM)
     clearance_ok = bool(min_unsigned + eps + 1e-9 >= required)
     admissible = (not has_collision) and clearance_ok
+    all_signed = np.concatenate([signed, extra_signed]) if len(extra_signed) else signed
+    all_dist = np.concatenate([distances, extra_dist]) if len(extra_dist) else distances
+    all_tri = np.concatenate([tri_ids, extra_tri]) if len(extra_tri) else tri_ids
+    contact_mask = (all_dist <= eps + 1e-9) & (all_signed >= -eps)
+    contact_ids = (
+        frozenset(int(v) for v in all_tri[contact_mask])
+        if np.any(contact_mask)
+        else frozenset()
+    )
     return EnvelopeCollisionReport(
         has_collision=has_collision,
         admissible=admissible,
@@ -234,6 +393,7 @@ def evaluate_envelope_collision(
         edge_hit=edge_hit,
         face_hit=face_hit,
         clearance_ok=clearance_ok,
+        contact_face_ids=contact_ids,
     )
 
 
@@ -271,6 +431,32 @@ def _offset_frame(
         wall_point_mm=np.asarray(base.wall_point_mm, dtype=np.float64),
         surface_progress_deg=float(base.surface_progress_deg),
     )
+
+
+def rigid_pose_neighborhood(
+    nominal: EnvelopeContactFrame,
+) -> tuple[EnvelopeContactFrame, ...]:
+    """Small 6-DOF neighbourhood around a nominal envelope pose. Rigid only."""
+    return tuple(_candidate_frames(nominal))
+
+
+def envelope_contact_face_ids(
+    posed_mesh: trimesh.Trimesh,
+    surface: InteriorSurfaceReference,
+    parameters: ScraperParameters,
+    *,
+    surface_mesh: trimesh.Trimesh | None = None,
+) -> frozenset[int]:
+    """Interior-triangle ids within the collision contact band, jar-side only.
+
+    Penetrating / glass-side samples are rejected. Uses the same proximity
+    primitive as ``evaluate_envelope_collision``.
+    """
+    if posed_mesh.is_empty or len(posed_mesh.vertices) == 0:
+        return frozenset()
+    return evaluate_envelope_collision(
+        posed_mesh, surface, parameters, surface_mesh=surface_mesh
+    ).contact_face_ids
 
 
 def _candidate_frames(nominal: EnvelopeContactFrame) -> list[EnvelopeContactFrame]:

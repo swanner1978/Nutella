@@ -41,6 +41,9 @@ if str(_ROOT) not in sys.path:
 
 from scripts.viewer_api import (  # noqa: E402
     API_BUILD_SCRAPER,
+    API_COVERAGE_ANGLE_AUDIT,
+    API_COVERAGE_RANK_CATALOG,
+    API_COVERAGE_TARGET_REGION,
     API_DEBUG_STEP_FACE_COLORS,
     API_IMPORT_STEP,
     API_INTERIOR_CONTOUR,
@@ -74,6 +77,9 @@ from nutella_scraper.engines.visualization.pose_visualization import (  # noqa: 
     build_pose_visualization_response,
 )
 from nutella_scraper.engines.visualization.viewer_bridge import (  # noqa: E402
+    build_coverage_angle_audit_response,
+    build_coverage_rank_catalog_response,
+    build_coverage_target_region_response,
     build_debug_step_face_colors_response,
     build_interior_contour_response,
     build_scraper_shape_candidates_response,
@@ -162,8 +168,18 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
                     "dev_mode": self.server.dev_mode,
                     "simulation_api": API_SIMULATE_CONTACT,
                     "status_api": f"{API_SIMULATIONS}/{{simulation_id}}",
+                    "coverage_rank_catalog_api": API_COVERAGE_RANK_CATALOG,
                 },
             )
+            return
+        if normalize_api_path(request_path) == API_COVERAGE_RANK_CATALOG:
+            self._handle_coverage_rank_catalog()
+            return
+        if normalize_api_path(request_path) == API_COVERAGE_ANGLE_AUDIT:
+            self._handle_coverage_angle_audit()
+            return
+        if normalize_api_path(request_path) == API_COVERAGE_TARGET_REGION:
+            self._handle_coverage_target_region()
             return
         pose_path = simulation_pose_path(request_path)
         if pose_path is not None:
@@ -496,6 +512,73 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
             if isinstance(exc, ValueError):
                 status = 422
             self._send_error_json(status, exc, request_id=request_id, stage=stage)
+
+    def _handle_coverage_rank_catalog(self) -> None:
+        stage = "coverage_rank_catalog"
+        try:
+            payload = build_coverage_rank_catalog_response(repo_root=_ROOT)
+            self._send_json(200, payload)
+        except FileNotFoundError as exc:
+            _LOG.warning("[coverage-rank] [%s] %s", stage, exc)
+            self._send_error_json(404, exc, request_id="coverage-rank", stage=stage)
+        except Exception as exc:
+            _LOG.exception(
+                "[coverage-rank] [%s] échec: %s: %s",
+                stage,
+                exc.__class__.__name__,
+                exc,
+            )
+            status = 422 if isinstance(exc, ValueError) else 500
+            self._send_error_json(status, exc, request_id="coverage-rank", stage=stage)
+
+    def _handle_coverage_angle_audit(self) -> None:
+        stage = "coverage_angle_audit"
+        try:
+            query = parse_qs(urlsplit(self.path).query)
+            raw_id = query.get("candidate_id", [""])[0]
+            payload = build_coverage_angle_audit_response(
+                repo_root=_ROOT,
+                candidate_id=str(raw_id),
+            )
+            self._send_json(200, payload)
+        except FileNotFoundError as exc:
+            self._send_error_json(404, exc, request_id="coverage-audit", stage=stage)
+        except Exception as exc:
+            _LOG.exception(
+                "[coverage-audit] [%s] échec: %s: %s",
+                stage,
+                exc.__class__.__name__,
+                exc,
+            )
+            status = 422 if isinstance(exc, ValueError) else 500
+            self._send_error_json(status, exc, request_id="coverage-audit", stage=stage)
+
+    def _handle_coverage_target_region(self) -> None:
+        stage = "coverage_target_region"
+        try:
+            query = parse_qs(urlsplit(self.path).query)
+            model_id = str(query.get("model_id", [""])[0] or "")
+            if not model_id:
+                active = self.server.active_view_dir
+                model_id = active.name if active is not None else ""
+            if not model_id:
+                raise FileNotFoundError("model_id requis pour /api/coverage-target-region")
+            payload = build_coverage_target_region_response(
+                models_root=self.server.models_root,
+                model_id=model_id,
+            )
+            self._send_json(200, payload)
+        except FileNotFoundError as exc:
+            self._send_error_json(404, exc, request_id="coverage-target", stage=stage)
+        except Exception as exc:
+            _LOG.exception(
+                "[coverage-target:%s] échec: %s: %s",
+                stage,
+                exc.__class__.__name__,
+                exc,
+            )
+            status = 422 if isinstance(exc, ValueError) else 500
+            self._send_error_json(status, exc, request_id="coverage-target", stage=stage)
 
     def _handle_scraper_shape_candidates(self, request_id: str) -> None:
         stage = "scraper_shape_candidates"
