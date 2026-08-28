@@ -170,13 +170,14 @@ def test_viewer_template_exposes_progress_cancel_and_diagnostics() -> None:
     assert 'id="toolbar-toggle-trajectory"' not in template
     assert 'id="toolbar-reset"' not in template
     assert 'id="simulate-contact"' in template
+    assert "/api/trajectory-search" in template
+    assert "API.trajectorySearch" in template
     assert 'id="toggle-envelope"' in template
     assert 'id="simulation-progress"' in template
     assert 'id="simulation-diagnostics"' in template
     assert 'method: "DELETE"' in template
     assert "async function cancelSimulation()" in template
     assert template.count("applyContactOverlays(pose);") == 1
-    assert "result_url" in template
     assert "frontend_transfer" in template
     assert 'id="trajectory-pose"' in template
     assert 'data-visibility-toggle="scraper"' in template

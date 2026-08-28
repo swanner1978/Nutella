@@ -1459,6 +1459,7 @@
         candidateCurve: null,
         coverageEnvelope: null,
         coverageTarget: null,
+        selectedTrajectory: null,
         coverageCoveredFaces: null,
         coverageUnionPoints: null,
         coverageNewPoints: null,
@@ -1483,6 +1484,7 @@
         coverageRankCatalog: "/api/coverage-rank-catalog",
         coverageAngleAudit: "/api/coverage-angle-audit",
         coverageTargetRegion: "/api/coverage-target-region",
+        trajectorySearch: "/api/trajectory-search",
         interiorContour: "/api/interior-contour",
         viewerScene: "/api/viewer-scene",
         runtime: "/api/runtime",
@@ -4774,6 +4776,35 @@
         ctx.globalAlpha = 1;
       }
 
+      function drawSearchTrajectory(ctx, trajectory, camera) {
+        const points = trajectory?.points_mm;
+        if (!Array.isArray(points) || points.length < 2) return;
+        ctx.beginPath();
+        let started = false;
+        for (const point of points) {
+          const p = projectPoint(point[0], point[1], point[2], camera);
+          if (p.depth <= 0.01) continue;
+          if (!started) {
+            ctx.moveTo(p.x, p.y);
+            started = true;
+          } else {
+            ctx.lineTo(p.x, p.y);
+          }
+        }
+        if (!started) return;
+        ctx.globalAlpha = 0.95;
+        ctx.strokeStyle = "#ff7a18";
+        ctx.lineWidth = 2.6;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.stroke();
+        const covered = trajectory.covered_points_mm;
+        if (Array.isArray(covered) && covered.length) {
+          drawCoverageAuditPoints(ctx, covered, camera, "#ffb347", 3.6);
+        }
+        ctx.globalAlpha = 1;
+      }
+
       function drawCandidateContactCurve(ctx, curve, camera) {
         if (!curve || curve.length < 2) return;
         const path = document.getElementById("toggle-scraper-smoothing")?.checked
@@ -4986,6 +5017,13 @@
             "#ffffff",
             3.2,
           );
+        }
+        if (
+          scraperSoloMode &&
+          scene3d.selectedTrajectory &&
+          Array.isArray(scene3d.selectedTrajectory.points_mm)
+        ) {
+          drawSearchTrajectory(ctx, scene3d.selectedTrajectory, camera);
         }
         setViewCubeVisible(true);
         drawViewCube();
@@ -5379,6 +5417,106 @@
         return `${Number(value).toFixed(2)}${unit}`;
       }
 
+      function formatExactCount(value) {
+        if (value == null) return "—";
+        const text = String(value);
+        if (!/^-?\d+$/.test(text)) return text;
+        return text.replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f");
+      }
+
+      function renderTrajectorySearchPanel(payload) {
+        const search = payload?.search ?? {};
+        const grid = payload?.grid ?? {};
+        const results = Array.isArray(payload?.results) ? payload.results : [];
+        const nText = formatExactCount(
+          search.total_valid_trajectories_decimal ?? search.total_valid_trajectories,
+        );
+        metricsPanel.replaceChildren();
+        const rows = [
+          ["Espace de recherche", `${nText} trajectoires`],
+          ["Nuage", `${grid.points ?? "—"} points`],
+          ["Rangées × colonnes", `${grid.rows ?? "—"} × ${grid.cols ?? "—"}`],
+          ["Espacement", `${grid.spacing_mm ?? "—"} mm`],
+          ["MAX_LATERAL_STEP", String(search.max_lateral_step ?? "—")],
+          ["MAX_DOWNWARD_STEP", String(search.max_downward_step ?? "—")],
+          ["Monotone vers le bas", search.monotonic_downward ? "oui" : "non"],
+          ["Remontée", search.allow_upward_motion ? "oui" : "non"],
+          ["Physique", search.physics_executed ? "exécutée" : "non lancée"],
+          ["Mode", String(search.enumeration_mode ?? "—")],
+        ];
+        for (const [label, value] of rows) {
+          const row = document.createElement("div");
+          row.className = "metric-row";
+          row.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+          metricsPanel.append(row);
+        }
+        const note = document.createElement("p");
+        note.className = "metrics-empty";
+        note.textContent = payload?.message
+          || search.physics_blocked_reason
+          || "Cardinalité calculée. Physique non lancée.";
+        metricsPanel.append(note);
+        const bestTitle = document.createElement("p");
+        bestTitle.className = "panel-section-label";
+        bestTitle.textContent = "BEST TRAJECTORY";
+        metricsPanel.append(bestTitle);
+        const best = results[0] ?? payload?.best ?? null;
+        if (!best) {
+          const emptyBest = document.createElement("p");
+          emptyBest.className = "metrics-empty";
+          emptyBest.textContent = "Aucun classement : la physique n'a pas été exécutée.";
+          metricsPanel.append(emptyBest);
+        } else {
+          const bestRows = [
+            ["Coverage", `${Number(best.coverage_percent).toFixed(2)} %`],
+            ["Points", `${best.covered_points} / ${best.total_points}`],
+            ["Moves", String(best.move_count ?? best.position_count ?? "—")],
+            ["Lateral moves", String(best.lateral_move_count ?? "—")],
+            ["Downward moves", String(best.downward_move_count ?? "—")],
+          ];
+          for (const [label, value] of bestRows) {
+            const row = document.createElement("div");
+            row.className = "metric-row";
+            row.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+            metricsPanel.append(row);
+          }
+        }
+        const topTitle = document.createElement("p");
+        topTitle.className = "panel-section-label";
+        topTitle.textContent = "TOP 10";
+        metricsPanel.append(topTitle);
+        if (!results.length) {
+          const emptyTop = document.createElement("p");
+          emptyTop.className = "metrics-empty";
+          emptyTop.textContent = "TOP 10 vide — cardinalité uniquement.";
+          metricsPanel.append(emptyTop);
+          scene3d.selectedTrajectory = null;
+        } else {
+          results.slice(0, 10).forEach((item, index) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "metric-row";
+            button.textContent = `#${item.rank ?? index + 1}  ${Number(item.coverage_percent).toFixed(2)} %`;
+            button.addEventListener("click", () => {
+              scene3d.selectedTrajectory = item;
+              if (scene3d.canvas) drawScene3D(scene3d.canvas, currentViewName);
+            });
+            metricsPanel.append(button);
+          });
+          scene3d.selectedTrajectory = results[0];
+        }
+        if (scene3d.canvas) drawScene3D(scene3d.canvas, currentViewName);
+        if (diagnosticSummary) {
+          diagnosticSummary.textContent = [
+            payload?.message ?? "",
+            `Grille ${grid.target_definition ?? ""}`,
+            Array.isArray(search.transition_rules)
+              ? search.transition_rules.join(" · ")
+              : "",
+          ].filter(Boolean).join("\n");
+        }
+      }
+
       function renderMetricsPanel(metrics) {
         if (!metrics) {
           metricsPanel.innerHTML =
@@ -5516,114 +5654,27 @@
           return;
         }
         setSimulationControls(true);
-        setStatus("Démarrage de la simulation…", "loading");
-        simulationPollController = new AbortController();
+        setStatus("Cardinalité de l'espace de trajectoires…", "loading");
         try {
-          const response = await fetch(API.simulateContact, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model_id: currentModelId }),
-            cache: "no-store",
-            signal: simulationPollController.signal,
-          });
-          const started = await readJsonResponse(response);
+          const response = await fetch(
+            `${API.trajectorySearch}?model_id=${encodeURIComponent(currentModelId)}`,
+            { cache: "no-store" },
+          );
+          const payload = await readJsonResponse(response);
           if (!response.ok) {
             throw new Error(
-              formatServerError(started, `Échec simulation (${response.status})`),
+              formatServerError(payload, `Échec recherche trajectoires (${response.status})`),
             );
           }
-          activeSimulation = started;
-          renderSimulationState(started);
-
-          let state = started;
-          while (!["completed", "failed", "cancelled"].includes(state.state)) {
-            await sleep(500);
-            const statusResponse = await fetch(started.status_url, {
-              cache: "no-store",
-              signal: simulationPollController.signal,
-            });
-            state = await readJsonResponse(statusResponse);
-            if (!statusResponse.ok) {
-              throw new Error(
-                formatServerError(state, `Échec du suivi (${statusResponse.status})`),
-              );
-            }
-            activeSimulation = { ...state, status_url: started.status_url, cancel_url: started.cancel_url };
-            renderSimulationState(state);
-          }
-
-          if (state.state === "cancelled") {
-            setStatus("Simulation annulée", "idle");
-            return;
-          }
-          if (state.state === "failed") {
-            renderPerformanceProfile(state.profile_ms, state.error);
-            const error = state.error ?? {};
-            const message = `[${error.exception_type ?? "SimulationError"}] ${
-              error.message ?? "La simulation a échoué"
-            }`;
-            if (error.traceback) console.error("[viewer:contact]\n", error.traceback);
-            throw new Error(message);
-          }
-
-          const transferStarted = performance.now();
-          const resultResponse = await fetch(state.result_url, {
-            cache: "no-store",
-            signal: simulationPollController.signal,
-          });
-          const result = await readJsonResponse(resultResponse);
-          const frontendTransferMs = performance.now() - transferStarted;
-          if (!resultResponse.ok) {
-            throw new Error(
-              formatServerError(result, `Échec du transfert (${resultResponse.status})`),
-            );
-          }
-
-          const refreshStarted = performance.now();
-          renderMetricsPanel(result.metrics);
-          scraperPoseProof.textContent = formatScraperPipelineProof(
-            result.scraper_pipeline,
-            result.trajectory,
-          );
-          // Keep Contour intérieur cache (STEP colour faces); do not replace with simulation envelope.
-          trajectoryOverlays = {
-            side: { "scraper-trajectory": result.overlays?.side?.["scraper-trajectory"] },
-            top: { "scraper-trajectory": result.overlays?.top?.["scraper-trajectory"] },
-            left: { "scraper-trajectory": result.overlays?.left?.["scraper-trajectory"] },
-            right: { "scraper-trajectory": result.overlays?.right?.["scraper-trajectory"] },
-          };
-          completedSimulation = {
-            pose_constraints: result.pose_constraints,
-            scraperPipeline: result.scraper_pipeline ?? null,
-          };
-          await initializePoseSelector(state);
-          await new Promise((resolve) => requestAnimationFrame(() => resolve()));
-          const uiRefreshMs = performance.now() - refreshStarted;
-          const profile = {
-            ...state.profile_ms,
-            frontend_transfer: frontendTransferMs,
-            ui_refresh: uiRefreshMs,
-          };
-          profile.total = Number(state.elapsed_ms ?? 0) + frontendTransferMs + uiRefreshMs;
-          renderPerformanceProfile(
-            profile,
-            null,
-            result.overlay_profile,
-            result.pose_constraints,
-            result.scraper_pipeline,
-          );
-          console.info("[viewer:simulation-profile]", {
-            timings_ms: profile,
-            overlay: result.overlay_profile,
-          });
-          setStatus("Simulation contact terminée", "ready");
+          renderTrajectorySearchPanel(payload);
+          const nText = payload?.search?.total_valid_trajectories_decimal
+            ?? payload?.search?.total_valid_trajectories
+            ?? "?";
+          setStatus(`Espace de recherche = ${nText} trajectoires`, "ready");
         } catch (error) {
-          if (error.name === "AbortError" && !activeSimulation) return;
           setStatus(error.message.split("\n")[0], "error");
-          console.error("[viewer:contact]", error);
+          console.error("[viewer:trajectory-search]", error);
         } finally {
-          activeSimulation = null;
-          simulationPollController = null;
           setSimulationControls(false);
         }
       }

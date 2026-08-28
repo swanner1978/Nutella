@@ -27,6 +27,7 @@ Does not subsample scraper vertices or extras. Does not change SE(3).
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import numpy as np
@@ -88,8 +89,21 @@ class EnvelopeSurfaceProximity:
         self._centroid_tree = cKDTree(centroids)
         self._max_extent = float(np.max(extents))
         self._knn_k = int(min(_KNN_K, len(triangles)))
+        self._trimesh_lock = threading.Lock()
         # Touch cached R-tree so a tied fallback does not rebuild it cold.
         _ = mesh.triangles_tree
+
+    def _trimesh_on_surface(
+        self, points: NDArray[np.float64]
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.int64]]:
+        """Trimesh nearest is not thread-safe; serialize only this fallback."""
+        with self._trimesh_lock:
+            close, dist, tri = self.mesh.nearest.on_surface(points)
+        return (
+            np.asarray(close, dtype=np.float64),
+            np.asarray(dist, dtype=np.float64),
+            np.asarray(tri, dtype=np.int64),
+        )
 
     def closest_on_surface(
         self,
@@ -118,17 +132,13 @@ class EnvelopeSurfaceProximity:
         counts = np.fromiter((len(ball) for ball in balls), dtype=np.int64, count=n_points)
         if np.any(counts == 0):
             PROXIMITY_STATS["empty_ball_points"] += int(np.count_nonzero(counts == 0))
-            close, dist, tri = self.mesh.nearest.on_surface(points)
-            return (
-                np.asarray(close, dtype=np.float64),
-                np.asarray(dist, dtype=np.float64),
-                np.asarray(tri, dtype=np.int64),
-            )
+            close, dist, tri = self._trimesh_on_surface(points)
+            return close, dist, tri
 
         close, dist, tri, tied, n_tri = self._closest_from_balls(points, balls, counts)
         PROXIMITY_STATS["triangles_examined"] += int(n_tri)
         if np.any(tied):
-            c2, d2, t2 = self.mesh.nearest.on_surface(points[tied])
+            c2, d2, t2 = self._trimesh_on_surface(points[tied])
             close[tied] = c2
             dist[tied] = d2
             tri[tied] = t2
@@ -182,7 +192,7 @@ class EnvelopeSurfaceProximity:
             fallback[expand] = tied_exp
 
         if np.any(fallback):
-            c2, d2, t2 = self.mesh.nearest.on_surface(points[fallback])
+            c2, d2, t2 = self._trimesh_on_surface(points[fallback])
             close[fallback] = c2
             dist[fallback] = d2
             tri[fallback] = t2
@@ -243,12 +253,12 @@ class EnvelopeSurfaceProximity:
         counts = np.fromiter((len(ball) for ball in balls), dtype=np.int64, count=len(points))
         if np.any(counts == 0):
             PROXIMITY_STATS["empty_ball_points"] += int(np.count_nonzero(counts == 0))
-            close, dist, tri = self.mesh.nearest.on_surface(points)
+            close, dist, tri = self._trimesh_on_surface(points)
             n = int(len(points))
             return (
-                np.asarray(close, dtype=np.float64),
-                np.asarray(dist, dtype=np.float64),
-                np.asarray(tri, dtype=np.int64),
+                close,
+                dist,
+                tri,
                 np.zeros((n,), dtype=np.bool_),
                 0,
             )

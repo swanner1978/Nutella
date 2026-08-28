@@ -51,6 +51,7 @@ from scripts.viewer_api import (  # noqa: E402
     API_SCRAPER_SHAPE_CANDIDATES,
     API_SIMULATE_CONTACT,
     API_SIMULATIONS,
+    API_TRAJECTORY_SEARCH,
     API_VIEWER_SCENE,
     build_not_found_payload,
     normalize_api_path,
@@ -84,6 +85,7 @@ from nutella_scraper.engines.visualization.viewer_bridge import (  # noqa: E402
     build_interior_contour_response,
     build_scraper_shape_candidates_response,
     build_scraper_visualization_response,
+    build_trajectory_search_response,
     build_viewer_scene_response,
 )
 
@@ -169,6 +171,7 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
                     "simulation_api": API_SIMULATE_CONTACT,
                     "status_api": f"{API_SIMULATIONS}/{{simulation_id}}",
                     "coverage_rank_catalog_api": API_COVERAGE_RANK_CATALOG,
+                    "trajectory_search_api": API_TRAJECTORY_SEARCH,
                 },
             )
             return
@@ -180,6 +183,9 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
             return
         if normalize_api_path(request_path) == API_COVERAGE_TARGET_REGION:
             self._handle_coverage_target_region()
+            return
+        if normalize_api_path(request_path) == API_TRAJECTORY_SEARCH:
+            self._handle_trajectory_search()
             return
         pose_path = simulation_pose_path(request_path)
         if pose_path is not None:
@@ -579,6 +585,37 @@ class ViewerHTTPRequestHandler(SimpleHTTPRequestHandler):
             )
             status = 422 if isinstance(exc, ValueError) else 500
             self._send_error_json(status, exc, request_id="coverage-target", stage=stage)
+
+    def _handle_trajectory_search(self) -> None:
+        stage = "trajectory_search"
+        try:
+            query = parse_qs(urlsplit(self.path).query)
+            model_id = str(query.get("model_id", [""])[0] or "")
+            if not model_id:
+                active = self.server.active_view_dir
+                model_id = active.name if active is not None else ""
+            if not model_id:
+                raise FileNotFoundError("model_id requis pour /api/trajectory-search")
+            output_path = (
+                self.server.models_root.parent / "coverage" / "trajectory_search_results.json"
+            )
+            payload = build_trajectory_search_response(
+                models_root=self.server.models_root,
+                model_id=model_id,
+                output_path=output_path,
+            )
+            self._send_json(200, payload)
+        except FileNotFoundError as exc:
+            self._send_error_json(404, exc, request_id="trajectory-search", stage=stage)
+        except Exception as exc:
+            _LOG.exception(
+                "[trajectory-search:%s] échec: %s: %s",
+                stage,
+                exc.__class__.__name__,
+                exc,
+            )
+            status = 422 if isinstance(exc, ValueError) else 500
+            self._send_error_json(status, exc, request_id="trajectory-search", stage=stage)
 
     def _handle_scraper_shape_candidates(self, request_id: str) -> None:
         stage = "scraper_shape_candidates"

@@ -760,6 +760,41 @@ def build_coverage_target_region_response(
     return payload
 
 
+def build_trajectory_search_response(
+    *,
+    models_root: Path,
+    model_id: str,
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    """Index the validated cloud and return exact trajectory cardinality.
+
+    Does not run CoverageSimulator or overwrite candidate_coverage_100.*.
+    """
+    from nutella_scraper.engines.compute.interior_surface_reference import (
+        load_interior_surface_reference,
+    )
+    from nutella_scraper.engines.compute.trajectory_search import (
+        DEFAULT_RESULTS_PATH,
+        report_to_payload,
+        simulate_scraper_trajectory_search,
+    )
+
+    interior = load_interior_surface_reference(
+        models_root=models_root,
+        model_id=str(model_id),
+        step_path=Path(models_root) / str(model_id) / ModelStore.REFERENCE_STEP,
+    )
+    target = Path(output_path) if output_path is not None else DEFAULT_RESULTS_PATH
+    report = simulate_scraper_trajectory_search(
+        interior,
+        output_path=target,
+    )
+    payload = report_to_payload(report)
+    payload["model_id"] = str(model_id)
+    payload["results_path"] = str(target)
+    return payload
+
+
 def _compact_mesh_payload(
     vertices: np.ndarray,
     *,
